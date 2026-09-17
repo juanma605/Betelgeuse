@@ -11,7 +11,7 @@ explorar, no para el reporte "oficial" de subvaluados.
 from __future__ import annotations
 
 import streamlit as st
-
+import pandas as pd
 from inmobot import analyze, config, db
 
 st.set_page_config(page_title="inmobot", layout="wide")
