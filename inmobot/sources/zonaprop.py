@@ -41,6 +41,10 @@ class ZonapropSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+        # Zonas donde el fetch se cortó antes de terminar (bloqueo anti-bot,
+        # error de red) — el caller no debe dar de baja avisos ahí solo
+        # porque no aparecieron en esta corrida incompleta.
+        self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
         base = f"{self.property_slug}-{self.operation_slug}-{slug(zone)}"
@@ -58,6 +62,7 @@ class ZonapropSource:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                     page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
                 except Exception as exc:
+                    self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
                             "[zonaprop] Cloudflare pidió verificación en %s (pág %d) — "

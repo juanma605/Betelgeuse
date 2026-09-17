@@ -1,0 +1,1968 @@
+
+
+============================================================
+ARCHIVO: .\APRENDIZAJE.md
+============================================================
+
+# Qué me tiene que enseñar este proyecto
+
+Checklist para medirme contra algo concreto en vez de "siento que estoy
+aprendiendo". Cada ítem tiene una prueba: si no puedo responderla sin mirar el
+código, no lo sé todavía.
+
+Se completa en el orden de las tareas del `CLAUDE.md`, no de corrido.
+
+---
+
+## 1. APIs e integración
+
+*Se aprende en la tarea 1 (hacer andar el scrape).*
+
+- [ ] **Anatomía de un request HTTP.** Query params, headers, status codes, body.
+      → *Prueba:* explicar qué hace cada línea del `client.get()` en
+      `mercadolibre.py` y por qué el `User-Agent` está ahí.
+
+- [ ] **Paginación.** Offset vs cursor, y por qué los topes existen.
+      → *Prueba:* ¿por qué `max_results_per_zone` es 1000 y qué pasa si lo subo a
+      5000? ¿Cómo consigo más de 1000 avisos de un barrio grande?
+
+- [ ] **Autenticación.** Bearer tokens, expiración, por qué el token no va en el
+      código.
+      → *Prueba:* ¿por qué `access_token` se lee de una variable de entorno y no
+      está escrito en `config.yaml`? ¿Qué pasa si commiteo un token a git?
+
+- [ ] **Fallar bien.** Distinguir un 401 de un 429 de un timeout, y reaccionar
+      distinto a cada uno.
+      → *Prueba:* implementar reintentos con backoff exponencial para el 429.
+      Hoy el código no lo hace — es un hueco real.
+
+- [ ] **Rate limiting y por qué importa.** No es cortesía, es no quedarse afuera.
+      → *Prueba:* ¿por qué ML tolera 0.4s entre requests y Zonaprop necesita 4s?
+
+---
+
+## 2. Modelado de datos y SQL
+
+*Se aprende leyendo `db.py` y viendo crecer la base.*
+
+- [ ] **Diseño de esquema.** Por qué estos campos, por qué dos tablas y no una.
+      → *Prueba:* ¿por qué `price_snapshots` es una tabla aparte en vez de una
+      columna `precio_anterior` en `listings`? (La respuesta es el corazón del
+      proyecto.)
+
+- [ ] **Clave primaria y upsert.** Idempotencia: correr dos veces no duplica.
+      → *Prueba:* ¿por qué el `id` es `"mercadolibre:MLA123"` y no `MLA123` a
+      secas? ¿Qué se rompe cuando agregue Zonaprop si uso solo el ID nativo?
+
+- [ ] **Índices.** Qué aceleran, qué cuestan.
+      → *Prueba:* ¿por qué hay índice en `fingerprint` y no en `title`?
+
+- [ ] **Estado vs evento.** `listings` es un estado que se pisa; `price_snapshots`
+      es un log de eventos que nunca se borra.
+      → *Prueba:* nombrar otra cosa del proyecto que convendría guardar como
+      evento y hoy se pierde.
+
+- [ ] **Soft delete.** Por qué `active = 0` en vez de `DELETE`.
+      → *Prueba:* ¿qué información valiosa perdería si borrara los avisos que
+      desaparecen?
+
+---
+
+## 3. Datos sucios (acá se va el 70% del tiempo real)
+
+*Se aprende en `normalize.py`, y es la parte que más se cobra como freelance.*
+
+- [ ] **Esquema común sobre fuentes heterogéneas.** Cada portal nombra las cosas
+      distinto; el resto del sistema no debería enterarse.
+      → *Prueba:* explicar por qué `_map()` vive en la fuente y no en
+      `normalize.py`.
+
+- [ ] **Datos faltantes.** Ausente ≠ cero ≠ inválido.
+      → *Prueba:* en `passes_filters`, un aviso sin `covered_area` **pasa** el
+      filtro de área mínima. ¿Por qué decidí eso? ¿Cuándo sería la decisión
+      equivocada?
+
+- [ ] **Conversión de unidades y moneda.** Y por qué la cotización es un dato con
+      fecha, no una constante.
+      → *Prueba:* si guardo un aviso en pesos hoy y el dólar se mueve 20%,
+      ¿el `price_norm` de la semana pasada sigue siendo comparable? ¿Cómo lo
+      arreglo?
+
+- [ ] **Parseo defensivo.** `_as()` existe porque los datos reales vienen rotos.
+      → *Prueba:* listar tres formas en que `"55 m²"` puede llegar y romper el
+      cast a float.
+
+---
+
+## 4. Deduplicación (entity resolution)
+
+*Se aprende en la tarea 2, calibrando con datos reales.*
+
+- [ ] **El problema.** No hay ID común entre portales; hay que inferir identidad.
+- [ ] **Fingerprint / blocking.** Comparar todos contra todos es O(n²); agrupar
+      por clave difusa primero lo hace tratable.
+      → *Prueba:* con 5.000 avisos, ¿cuántas comparaciones evita el fingerprint?
+
+- [ ] **Precisión vs recall.** El trade-off central, y que no existe el umbral
+      "correcto" — existe el que conviene al costo del error.
+      → *Prueba:* para *mí, comprando*, ¿qué es peor: un duplicado falso que me
+      hace perder dos minutos, o un duplicado no detectado que me esconde que la
+      misma unidad está 8% más barata en otra agencia? La respuesta define si
+      `title_similarity` sube o baja.
+
+- [ ] **Similitud de strings.** Qué mide `SequenceMatcher` y cuándo falla.
+      → *Prueba:* dar dos títulos del mismo depto que el ratio de 0.6 no atrapa.
+
+---
+
+## 5. Estadística aplicada
+
+*Se aprende en `analyze.py`, tareas 2 y 5.*
+
+- [ ] **Mediana vs media, y por qué acá uso mediana.**
+      → *Prueba:* explicar con un ejemplo de Puerto Madero en una muestra de
+      Almagro.
+
+- [ ] **Percentiles y dispersión.** p25/p75 dicen más que el promedio.
+      → *Prueba:* dos barrios con la misma mediana y p75 muy distinto — ¿qué
+      significa eso para el comprador?
+
+- [ ] **Outliers.** Por qué recorto 5% antes de calcular, y qué riesgo corro.
+      → *Prueba:* ¿puede el recorte estar borrando justo las oportunidades que
+      busco? (Sí. Pensar por qué igual conviene.)
+
+- [ ] **Tamaño de muestra.** Por qué `min_comparables = 20`.
+      → *Prueba:* ¿qué pasa si calculo la mediana de un barrio con 3 avisos?
+
+- [ ] **Regresión lineal múltiple.** Coeficientes, residuos, y que el residuo
+      negativo *es* la señal de subvaluado.
+      → *Prueba:* implementar la tarea 5 **yo**, sin Claude Code, y después
+      pedirle que la critique.
+
+- [ ] **Correlación ≠ causalidad, y overfitting.** Un modelo con 30 variables y
+      200 avisos memoriza en vez de aprender.
+      → *Prueba:* ¿cómo sé si mi regresión generaliza? (Buscar: train/test split.)
+
+---
+
+## 6. Ingeniería de software
+
+*Transversal. Es lo que separa un script de un producto.*
+
+- [ ] **Configuración vs código.** El principio rector del proyecto.
+      → *Prueba:* encontrar algo que hoy esté hardcodeado y debería estar en el
+      YAML.
+
+- [ ] **Separación de capas.** Fuente → normalización → persistencia → análisis →
+      presentación. Cada una ignora a las demás.
+      → *Prueba:* ¿cuántos archivos tengo que tocar para agregar Argenprop? Si es
+      más de dos, el diseño está mal.
+
+- [ ] **Idempotencia.** Correr dos veces = correr una vez.
+- [ ] **Tests.** Hoy el proyecto tiene cero. Es el hueco más grande.
+      → *Prueba:* escribir un test de `to_currency()` y uno de
+      `passes_filters()`. Empezar por ahí porque son funciones puras.
+
+- [ ] **Git como red de seguridad.** Commits chicos, mensajes que explican el
+      *por qué*.
+      → *Prueba:* ¿puedo volver al estado de ayer sin perder nada?
+
+---
+
+## 7. Producto y negocio
+
+*Lo que nadie enseña y es lo que realmente se cobra.*
+
+- [ ] **Qué dato vale y por qué.** El aviso es commodity; el historial es activo.
+      → *Prueba:* explicar en dos frases, sin tecnicismos, por qué esto vale para
+      una inmobiliaria.
+
+- [ ] **Datos que se acumulan.** Por qué el valor crece con el tiempo y es difícil
+      de copiar.
+
+- [ ] **Empaquetado.** El cliente no compra un script, compra un informe o una
+      alerta.
+      → *Prueba:* ¿cuál es el entregable? ¿Un CSV, un dashboard, un PDF mensual?
+
+- [ ] **De proyecto a producto.** Detectar que tres clientes piden lo mismo.
+
+---
+
+## Cómo lo uso
+
+- Reviso esto **después** de cada tarea del `CLAUDE.md`, no antes.
+- Un ítem se tilda solo si respondí la prueba **sin mirar el código**.
+- Lo que no puedo responder no es un fracaso: es la lista de lo que estudio
+  después, y es más útil que cualquier plan armado de antemano.
+- Cada dos semanas, borro un módulo chico y lo reescribo de memoria.
+  `normalize.py` es el mejor candidato.
+
+
+============================================================
+ARCHIVO: .\CLAUDE.md
+============================================================
+
+# inmobot — contexto del proyecto
+
+## Quién soy y qué busco
+
+Estudiante de ingeniería industrial, segundo año. Sé Python, SQL, HTML/CSS/JS a
+nivel intermedio: no soy experto, explicame las decisiones no obvias en vez de
+solo escribir código. Trabajo a los saltos — días de muchas horas seguidas y días
+de cero — así que prefiero avances que queden en un estado usable, no ramas a
+medio terminar.
+
+Esto tiene doble objetivo: me sirve a mí (estoy buscando departamento) y es mi
+primer proyecto de portfolio para arrancar a freelancear con automatización y
+datos.
+
+## Qué es esto
+
+Scraper + motor de análisis de avisos inmobiliarios, configurable por completo
+desde `config.yaml`. La idea no es juntar avisos (eso ya lo hace cualquier
+portal) sino construir el mercado: precio por m² por zona, detección de
+subvaluados, historial de precios y candidatos a duplicado entre agencias.
+
+El activo diferencial es el **historial de precios**: cada corrida guarda un
+snapshot por aviso. Ningún portal muestra que un departamento bajó tres veces y
+lleva 90 días publicado, y ese es el dato que sirve para negociar (y por el que
+un cliente pagaría).
+
+## Arquitectura
+
+```
+config.yaml              # TODO lo configurable — zonas, rangos, filtros, umbrales
+inmobot/
+  config.py              # carga, merge de defaults, resolución de "env:VAR"
+  db.py                  # SQLite: listings (upsert) + price_snapshots (historial)
+  normalize.py           # esquema común, conversión de moneda, filtros, fingerprint
+  analyze.py             # precio/m², subvaluados, bajadas, stale, duplicados, score
+  cli.py                 # scrape | analyze | export
+  sources/
+    mercadolibre.py      # implementado (API pública, sin anti-bot)
+```
+
+Principio de diseño: **nada hardcodeado**. Cambiar de "deptos en venta en
+Caballito" a "PHs en alquiler en Quilmes" tiene que ser solo YAML. Si algo
+necesita tocar código para cambiar de búsqueda, está mal diseñado.
+
+## Estado
+
+Probado offline con datos sintéticos: filtros, upsert, snapshots, subvaluados y
+bajadas de precio funcionan. **Nunca se corrió contra la API real.**
+
+## Tareas, en orden
+
+### 1. Hacer que el scrape funcione de verdad (primero esto)
+
+Corré `python -m inmobot scrape` y arreglá lo que rompa. Sospechas principales:
+
+- **401/403**: ML fue restringiendo la búsqueda pública. Puede necesitar un token
+  de app en `sources.mercadolibre.access_token`.
+- **Filtros que no filtran**: los IDs de `OPERATION` (242075) y `PROPERTY_TYPE`
+  (242060) son los históricos de MLA. Pegale a
+  `/sites/MLA/search?category=MLA1459` y mirá `available_filters` para los
+  vigentes.
+- **Atributos vacíos**: `ATTRIBUTE_MAP` en `mercadolibre.py` asume
+  `COVERED_AREA`, `ROOMS`, `MAINTENANCE_FEE`. Imprimí `raw["attributes"]` de un
+  aviso real y ajustá el mapa.
+
+No sigas a la 2 hasta tener avisos reales en la base.
+
+### 2. Calibrar el análisis con datos reales
+
+Corré `analyze` y revisá si los umbrales del config tienen sentido. En
+particular `duplicate_candidates`: el fingerprint difuso da muchos falsos
+positivos y el filtro de similitud de título (0.6) está sin calibrar contra
+títulos reales.
+
+### 3. Streamlit encima de la base
+
+~50 líneas: filtros, tabla ordenable por score, mapa con lat/long. Es lo que
+convierte esto en algo mostrable.
+
+### 4. Zonaprop y Argenprop
+
+El hueco ya está en `config.yaml` y en `cli.SOURCE_BUILDERS`. Falta el fetcher:
+Playwright, headers reales, rate limit de 3-5 segundos. Son de la misma empresa
+y tienen anti-bot serio. **Scrapeo lento y respetuoso de robots.txt** — no me
+interesa ganar velocidad a cambio de un ban de IP.
+
+Interfaz a implementar: una clase con `fetch(zone, search_cfg)` que devuelva
+dicts con las claves del esquema (mirá `mercadolibre._map` como referencia),
+registrada en `SOURCE_BUILDERS`.
+
+### 5. Regresión en vez de mediana
+
+`find_undervalued` compara contra la mediana de zona/ambientes. Con 2.000+ avisos
+conviene una regresión sobre área, ambientes, antigüedad y barrio.
+
+### 6. Alertas por Telegram
+
+Leyendo `alerts.telegram` del config, disparando cuando aparece algo sobre
+`min_score`.
+
+## Cómo quiero que trabajes
+
+- Corré el código antes de decir que anda. Si no lo pudiste probar, decilo.
+- Cambios chicos y verificables, no refactors grandes.
+- Si una decisión tiene un trade-off real, decímelo en una línea en vez de
+  elegir en silencio.
+- Los datos se guardan localmente para análisis propio. No redistribuir avisos.
+
+
+============================================================
+ARCHIVO: .\config.yaml
+============================================================
+
+# =============================================================================
+# inmobot — configuración
+# Todo lo que cambia entre búsquedas (o entre clientes) vive acá.
+# =============================================================================
+
+search:
+  # Zonas a rastrear. Se usan como texto de búsqueda y para agrupar comparables.
+  # Podés poner barrios, partidos o ciudades.
+  zones:
+    - "Villa Crespo"
+    - "Almagro"
+    - "Caballito"
+
+  # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
+  # usando fx_rates (abajo) o se descartan si no hay cotización.
+  currency: USD
+
+  price_min: 80000
+  price_max: 140000
+
+  # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
+  filters:
+    covered_area_min: 40        # m² cubiertos
+    covered_area_max: null
+    total_area_min: null
+    rooms_min: 2                # ambientes
+    rooms_max: 3
+    bedrooms_min: null
+    max_maintenance_fee: null   # expensas, en moneda local
+    max_age_years: null         # antigüedad
+    require_photos: true
+
+  # Cotizaciones para normalizar a `currency`. Actualizalas a mano o
+  # enchufá una API después (ver README).
+  fx_rates:
+    ARS_per_USD: 1400
+
+sources:
+  mercadolibre:
+    enabled: true
+    site: MLA                   # MLA=Argentina, MLU=Uruguay, MLC=Chile...
+    # ML dejó de modelar tipo de propiedad + operación como filtros de
+    # atributo (OPERATION/PROPERTY_TYPE ya no existen) y ahora los maneja
+    # como categoría anidada. Para cambiar de búsqueda, poné acá la
+    # categoría hoja que corresponda (verificado 2026-09 contra
+    # /categories/<id>, endpoint público que no requiere token):
+    #   Departamentos MLA1472 -> Alquiler MLA1473 | Alq.temp MLA50279 | Venta MLA1474
+    #   Casas         MLA1466 -> Alquiler MLA1467 | Alq.temp MLA50278 | Venta MLA1468
+    #   PH            MLA105179 -> Alquiler MLA105181 | Alq.temp MLA105180 | Venta MLA105182
+    category: MLA1474           # Departamentos en venta
+    max_results_per_zone: 1000  # tope duro de la API (offset máx 1000)
+    page_size: 50
+    rate_limit_seconds: 0.4
+    # ML cerró la búsqueda pública: hace falta un access_token vigente.
+    # Con `oauth` (client_id + client_secret de tu app) se pide uno nuevo
+    # por client_credentials en cada corrida — no vence, no hay que
+    # loguearse nunca ni guardar nada. `access_token` de abajo es solo el
+    # fallback manual si no completás `oauth`.
+    oauth:
+      client_id: "env:ML_CLIENT_ID"
+      client_secret: "env:ML_CLIENT_SECRET"
+    access_token: "env:ML_ACCESS_TOKEN"
+
+  zonaprop:
+    enabled: true
+    # Arman la URL como <property_slug>-<operation_slug>-<zona>.html
+    property_slug: departamentos   # departamentos | casas | ph
+    operation_slug: venta          # venta | alquiler | alquiler-temporario
+    rate_limit_seconds: 4.0
+    # El robots.txt del sitio solo permite indexar hasta la página 5
+    # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
+    # Es un tope duro: aunque pongas más, el código lo recorta a 5.
+    max_pages: 5
+
+  argenprop:
+    enabled: true
+    # Arman la URL como /<property_slug>/<operation_slug>/<zona>
+    property_slug: departamentos   # departamentos | casas | ph
+    operation_slug: venta          # venta | alquiler
+    rate_limit_seconds: 4.0
+    # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
+    max_pages: 3
+
+storage:
+  path: "data/listings.db"
+  # Cada corrida guarda un snapshot de precio por aviso. Esto es lo que
+  # construye el historial que ningún portal te muestra.
+  keep_snapshots: true
+
+dedup:
+  enabled: true
+  # Dos avisos se consideran el mismo inmueble si coinciden en zona,
+  # ambientes, y caen dentro de estas tolerancias.
+  area_tolerance_m2: 2
+  price_tolerance_pct: 5
+
+analysis:
+  # Un aviso es "subvaluado" si su precio está este % por debajo del
+  # esperado para su zona/tipología.
+  undervalued_threshold_pct: 15
+  # No calcules estadísticas de una zona con menos comparables que esto.
+  min_comparables: 20
+  # Avisos publicados hace más de N días = vendedor potencialmente apurado.
+  stale_days: 60
+  # Recorte de outliers antes de calcular medianas (percentiles).
+  outlier_trim_pct: 5
+
+alerts:
+  telegram:
+    enabled: false
+    bot_token: "env:TELEGRAM_BOT_TOKEN"
+    chat_id: "env:TELEGRAM_CHAT_ID"
+    # Avisar solo si el aviso supera este score de oportunidad (0-100).
+    min_score: 70
+
+logging:
+  level: INFO
+
+
+============================================================
+ARCHIVO: .\juntar_codigo.py
+============================================================
+
+import os
+
+with open("todo_el_proyecto.txt", "w", encoding="utf-8") as outfile:
+    for root, dirs, files in os.walk("."):
+        # Ignoramos carpetas que no suman contexto
+        if any(ignored in root for ignored in [".git", "__pycache__", "venv", ".venv"]):
+            continue
+        
+        for file in files:
+            if file.endswith((".py", ".yaml", ".md")):
+                filepath = os.path.join(root, file)
+                outfile.write(f"\n\n{'='*60}\n")
+                outfile.write(f"ARCHIVO: {filepath}\n")
+                outfile.write(f"{'='*60}\n\n")
+                try:
+                    with open(filepath, "r", encoding="utf-8") as infile:
+                        outfile.write(infile.read())
+                except Exception as e:
+                    outfile.write(f"[Error leyendo el archivo: {e}]\n")
+
+print("Listo! Se generó 'todo_el_proyecto.txt'")
+
+============================================================
+ARCHIVO: .\README.md
+============================================================
+
+# inmobot
+
+Scraping y análisis de avisos inmobiliarios, con todo parametrizado en `config.yaml`.
+
+No junta avisos: construye el mercado. Precio por m² por zona, detección de
+subvaluados, historial de precios y candidatos a duplicado entre agencias.
+
+## Instalación
+
+```bash
+pip install httpx pandas pyyaml
+```
+
+## Uso
+
+```bash
+python -m inmobot scrape     # trae avisos y guarda un snapshot de precios
+python -m inmobot analyze    # imprime el análisis en consola
+python -m inmobot export     # además vuelca todo a data/reports/*.csv
+```
+
+Poné el `scrape` en un cron diario. El valor del proyecto crece con cada corrida:
+el historial de precios es lo único que no podés conseguir en ningún portal.
+
+```cron
+0 7 * * * cd /ruta/inmobot && /usr/bin/python3 -m inmobot scrape >> data/cron.log 2>&1
+```
+
+## Qué es configurable
+
+Todo lo que cambia entre búsquedas está en `config.yaml`, no en el código:
+
+| Sección | Qué controla |
+|---|---|
+| `search.zones` | barrios o partidos a rastrear |
+| `search.price_min/max`, `search.currency` | rango y moneda de comparación |
+| `search.filters` | m², ambientes, dormitorios, expensas, antigüedad, fotos |
+| `search.fx_rates` | cotización para normalizar avisos en pesos |
+| `sources.*` | qué portales usar, rate limit, filtros nativos de cada API |
+| `dedup` | tolerancias de área y precio para el fingerprint |
+| `analysis` | umbral de subvaluado, mínimo de comparables, días de antigüedad, recorte de outliers |
+| `alerts.telegram` | notificaciones por score de oportunidad |
+
+Para cambiar de venta a alquiler, o de departamento a PH, tocás
+`sources.mercadolibre.category` (ver el mapeo de IDs en el comentario de
+`config.yaml`). Para venderle esto a un cliente, le cambiás el YAML y nada
+más.
+
+## Estado actual
+
+- **MercadoLibre**: implementado. API pública, JSON estructurado, sin anti-bot.
+- **Zonaprop / Argenprop**: el hueco está armado (`sources` en el config, registro
+  en `cli.SOURCE_BUILDERS`) pero falta escribir el fetcher. Necesitan Playwright,
+  headers reales y rate limit de 3-5 s. Son de la misma empresa y tienen
+  protección anti-bot seria.
+
+Para agregar una fuente: creá `inmobot/sources/tufuente.py` con una clase que
+exponga `fetch(zone, search_cfg)` devolviendo dicts con las claves del esquema
+(mirá `mercadolibre._map`), y registrala en `SOURCE_BUILDERS`.
+
+## Cosas que tenés que verificar en la primera corrida real
+
+No pude probar contra la API en vivo, así que revisá esto:
+
+1. **Token de MercadoLibre (confirmado, bloqueante).** La API pública ya no
+   funciona sin auth: `/sites/MLA/search`, `/items/{id}` y prácticamente todo
+   menos `/categories/*` devuelven 403 sin token, incluso sin ningún filtro.
+   Hace falta generar un `access_token` vía OAuth (flujo `authorization_code`,
+   no hay `client_credentials`: hay que crear una app en
+   developers.mercadolibre.com.ar y loguearse una vez con una cuenta de ML) y
+   ponerlo en `sources.mercadolibre.access_token` (o exportar `ML_ACCESS_TOKEN`
+   y usar `"env:ML_ACCESS_TOKEN"`). El token expira a las 6 horas y el
+   `refresh_token` es de un solo uso — para un cron hace falta guardar y rotar
+   el refresh_token, no alcanza con pegar un token fijo.
+2. **IDs de filtros (ya corregido).** `OPERATION`/`PROPERTY_TYPE` no existen
+   más como filtros de atributo: ML pasó a modelar tipo de propiedad +
+   operación como categoría anidada (ej. Departamentos `MLA1472` → Venta
+   `MLA1474`). El config y `mercadolibre.py` ya usan `category` con la
+   categoría hoja — ver el mapeo en el comentario de `config.yaml`.
+3. **Nombres de atributos.** `ATTRIBUTE_MAP` en `mercadolibre.py` asume
+   `COVERED_AREA`, `ROOMS`, `MAINTENANCE_FEE`, etc. Si vienen vacíos, imprimí
+   `raw["attributes"]` de un aviso y ajustá el mapa.
+4. **Duplicados.** El test offline los infla porque los títulos sintéticos son
+   idénticos. Con títulos reales el filtro de similitud debería dejar pocos.
+   Si siguen dando muchos, subí `title_similarity` en `duplicate_candidates`.
+
+## Próximos pasos naturales
+
+1. **Streamlit encima de la base.** ~50 líneas y tenés filtros, tabla y mapa.
+   Es lo que convierte esto en algo mostrable a un cliente.
+2. **Regresión en vez de mediana.** `find_undervalued` compara contra la mediana
+   de zona/ambientes. Con 2.000+ avisos, una regresión sobre área, ambientes,
+   antigüedad y barrio te va a dar un precio esperado mucho más fino.
+3. **Bot de Telegram** leyendo `alerts.telegram` y disparando cuando aparece algo
+   sobre `min_score`.
+4. **Geocoding** de los avisos sin lat/long, para análisis por distancia a
+   subte/parques en vez de por barrio.
+
+## Escrúpulos
+
+Rate limit conservador, `robots.txt` respetado, datos guardados localmente para
+análisis propio. Scrapear despacio para analizar el mercado es terreno tranquilo;
+redistribuir los avisos de un portal ya no lo es.
+
+
+============================================================
+ARCHIVO: .\inmobot\analyze.py
+============================================================
+
+"""Análisis.
+
+Acá está el valor real del proyecto: los portales te muestran avisos, esto
+te muestra el mercado. Todos los umbrales salen del config.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from difflib import SequenceMatcher
+from datetime import datetime, timedelta, timezone
+
+import pandas as pd
+
+
+def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
+    df = pd.read_sql_query("SELECT * FROM listings WHERE active = 1", conn)
+    if df.empty:
+        return df
+    df["area"] = df["covered_area"].fillna(df["total_area"])
+    df = df[(df["area"] > 0) & (df["price_norm"] > 0)]
+    df["price_per_m2"] = df["price_norm"] / df["area"]
+    return df
+
+
+def _trim_outliers(series: pd.Series, trim_pct: float) -> pd.Series:
+    if trim_pct <= 0 or series.empty:
+        return series
+    low = series.quantile(trim_pct / 100)
+    high = series.quantile(1 - trim_pct / 100)
+    return series[(series >= low) & (series <= high)]
+
+
+def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Mediana y percentiles de precio/m² por zona y cantidad de ambientes."""
+    trim = cfg.get("outlier_trim_pct", 5)
+    min_n = cfg.get("min_comparables", 20)
+
+    rows = []
+    for (zone, rooms), group in df.groupby(["zone", "rooms"], dropna=False):
+        clean = _trim_outliers(group["price_per_m2"], trim)
+        if len(clean) < min_n:
+            continue
+        rows.append({
+            "zone": zone,
+            "rooms": rooms,
+            "n": len(clean),
+            "p25": clean.quantile(0.25),
+            "median": clean.median(),
+            "p75": clean.quantile(0.75),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def find_undervalued(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Avisos cuyo precio/m² está por debajo de la mediana de sus comparables.
+
+    Es un modelo deliberadamente simple. Cuando tengas volumen, reemplazá la
+    mediana por una regresión sobre área, ambientes, antigüedad y barrio.
+    """
+    stats = zone_stats(df, cfg)
+    if stats.empty:
+        return pd.DataFrame()
+
+    threshold = cfg.get("undervalued_threshold_pct", 15)
+    merged = df.merge(stats[["zone", "rooms", "median", "n"]], on=["zone", "rooms"])
+    merged["expected_price"] = merged["median"] * merged["area"]
+    merged["discount_pct"] = (
+        (merged["expected_price"] - merged["price_norm"]) / merged["expected_price"] * 100
+    )
+
+    hits = merged[merged["discount_pct"] >= threshold]
+    return hits.sort_values("discount_pct", ascending=False)
+
+
+def price_drops(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Avisos que bajaron de precio, con cuántas veces y cuánto en total.
+
+    Un aviso con varias bajas es un vendedor con apuro. Este dato no existe
+    en ningún portal.
+    """
+    snaps = pd.read_sql_query(
+        "SELECT listing_id, seen_at, price_norm FROM price_snapshots "
+        "ORDER BY listing_id, seen_at",
+        conn,
+    )
+    if snaps.empty:
+        return pd.DataFrame()
+
+    snaps = snaps.dropna(subset=["price_norm"])
+    grouped = snaps.groupby("listing_id")["price_norm"]
+
+    summary = pd.DataFrame({
+        "first_price": grouped.first(),
+        "current_price": grouped.last(),
+        "observations": grouped.count(),
+    })
+    summary["drops"] = grouped.apply(lambda s: int((s.diff() < 0).sum()))
+    summary["total_drop_pct"] = (
+        (summary["first_price"] - summary["current_price"]) / summary["first_price"] * 100
+    )
+
+    result = summary[summary["total_drop_pct"] > 0].reset_index()
+    return result.sort_values("total_drop_pct", ascending=False)
+
+
+def stale_listings(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Avisos publicados hace más de analysis.stale_days."""
+    days = cfg.get("stale_days", 60)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    first_seen = pd.to_datetime(df["first_seen"], format="ISO8601", utc=True)
+    out = df[first_seen < cutoff].copy()
+    out["days_listed"] = (datetime.now(timezone.utc) - first_seen[out.index]).dt.days
+    return out.sort_values("days_listed", ascending=False)
+
+
+def duplicate_candidates(df: pd.DataFrame, title_similarity: float = 0.6) -> pd.DataFrame:
+    """Mismo inmueble publicado más de una vez: revela el margen entre agencias.
+
+    El fingerprint solo (zona + ambientes + área + precio) genera muchísimos
+    falsos positivos: en Almagro hay cientos de 2 ambientes de 50 m² a 115k que
+    no son el mismo departamento. Por eso exigimos además que los títulos se
+    parezcan. Son *candidatos*: la confirmación final es mirar las fotos.
+    """
+    counts = df.groupby("fingerprint").size()
+    repeated = counts[counts > 1].index
+    dupes = df[df["fingerprint"].isin(repeated)].copy()
+    if dupes.empty:
+        return dupes
+
+    keep_groups = []
+    for fp, group in dupes.groupby("fingerprint"):
+        titles = group["title"].fillna("").tolist()
+        pairs = [
+            SequenceMatcher(None, a.lower(), b.lower()).ratio()
+            for i, a in enumerate(titles)
+            for b in titles[i + 1:]
+        ]
+        if pairs and max(pairs) >= title_similarity:
+            keep_groups.append(fp)
+
+    dupes = dupes[dupes["fingerprint"].isin(keep_groups)]
+    if dupes.empty:
+        return dupes
+
+    spread = dupes.groupby("fingerprint")["price_norm"].agg(["min", "max"])
+    spread["spread_pct"] = (spread["max"] - spread["min"]) / spread["min"] * 100
+    return dupes.merge(spread, on="fingerprint").sort_values(
+        ["spread_pct", "fingerprint"], ascending=False
+    )
+
+
+def opportunity_score(df: pd.DataFrame, drops: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Score 0-100 combinando descuento, bajas de precio y antigüedad del aviso.
+
+    Los pesos son un punto de partida: movelos cuando veas resultados reales.
+    """
+    if df.empty:
+        return df
+
+    scored = df.copy()
+    threshold = cfg.get("undervalued_threshold_pct", 15)
+
+    discount = scored.get("discount_pct", pd.Series(0, index=scored.index)).fillna(0)
+    scored["score_discount"] = (discount / (threshold * 2)).clip(0, 1) * 60
+
+    if not drops.empty:
+        drop_map = drops.set_index("listing_id")["total_drop_pct"]
+        scored["drop_pct"] = scored["id"].map(drop_map).fillna(0)
+    else:
+        scored["drop_pct"] = 0
+    scored["score_drop"] = (scored["drop_pct"] / 15).clip(0, 1) * 25
+
+    first_seen = pd.to_datetime(scored["first_seen"], format="ISO8601", utc=True)
+    days = (datetime.now(timezone.utc) - first_seen).dt.days
+    scored["score_stale"] = (days / cfg.get("stale_days", 60)).clip(0, 1) * 15
+
+    scored["score"] = (
+        scored["score_discount"] + scored["score_drop"] + scored["score_stale"]
+    ).round(1)
+    return scored.sort_values("score", ascending=False)
+
+
+============================================================
+ARCHIVO: .\inmobot\cli.py
+============================================================
+
+"""CLI.
+
+    python -m inmobot scrape    # trae avisos y guarda snapshot de precios
+    python -m inmobot analyze   # estadísticas de mercado y oportunidades
+    python -m inmobot export    # vuelca resultados a CSV
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+from pathlib import Path
+
+import pandas as pd
+
+from . import analyze, db, normalize
+from .config import load as load_config
+from .sources import argenprop, mercadolibre, zonaprop
+
+log = logging.getLogger("inmobot")
+
+SOURCE_BUILDERS = {
+    "mercadolibre": mercadolibre.build,
+    "zonaprop": zonaprop.build,
+    "argenprop": argenprop.build,
+}
+
+
+def cmd_scrape(cfg) -> None:
+    search_cfg = cfg["search"]
+    dedup_cfg = cfg["dedup"]
+    keep = cfg.get_path("storage.keep_snapshots", True)
+
+    with db.connect(cfg.get_path("storage.path")) as conn:
+        for name, conf in cfg["sources"].items():
+            if not conf.get("enabled"):
+                continue
+            builder = SOURCE_BUILDERS.get(name)
+            if builder is None:
+                log.warning("Fuente '%s' habilitada pero no implementada todavía.", name)
+                continue
+
+            source = builder(conf)
+            kept: list[dict] = []
+            seen_ids: set[str] = set()
+            rejected = 0
+
+            for zone in search_cfg["zones"]:
+                log.info("[%s] buscando en %s...", name, zone)
+                for item in source.fetch(zone, search_cfg):
+                    item = normalize.normalize(item, search_cfg, dedup_cfg)
+                    ok, _reason = normalize.passes_filters(item, search_cfg)
+                    if not ok:
+                        rejected += 1
+                        continue
+                    kept.append(item)
+                    seen_ids.add(item["id"])
+
+            stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
+            gone = db.mark_inactive(conn, seen_ids, name)
+            log.info(
+                "[%s] %d nuevos, %d actualizados, %d cambios de precio, "
+                "%d dados de baja, %d descartados por filtros",
+                name, stats["new"], stats["updated"], stats["price_changes"],
+                gone, rejected,
+            )
+
+
+def cmd_analyze(cfg, export_dir: Path | None = None) -> None:
+    acfg = cfg["analysis"]
+
+    with db.connect(cfg.get_path("storage.path")) as conn:
+        df = analyze.load_active(conn)
+        if df.empty:
+            log.warning("No hay avisos activos. Corré 'scrape' primero.")
+            return
+
+        drops = analyze.price_drops(conn)
+
+    stats = analyze.zone_stats(df, acfg)
+    under = analyze.find_undervalued(df, acfg)
+    stale = analyze.stale_listings(df, acfg)
+    dupes = analyze.duplicate_candidates(df)
+    scored = analyze.opportunity_score(under if not under.empty else df, drops, acfg)
+
+    print(f"\n{len(df)} avisos activos\n")
+
+    if not stats.empty:
+        print("=== Precio por m² (mediana, en moneda de comparación) ===")
+        print(stats.round(0).to_string(index=False), "\n")
+
+    if not under.empty:
+        print(f"=== Subvaluados (>= {acfg['undervalued_threshold_pct']}% bajo la mediana) ===")
+        cols = ["title", "zone", "area", "price_norm", "discount_pct", "url"]
+        print(under[cols].head(15).round(1).to_string(index=False), "\n")
+
+    if not drops.empty:
+        print("=== Bajaron de precio ===")
+        print(drops.head(15).round(1).to_string(index=False), "\n")
+
+    if not stale.empty:
+        print(f"=== Publicados hace más de {acfg['stale_days']} días ===")
+        print(stale[["title", "zone", "price_norm", "days_listed"]].head(15).to_string(index=False), "\n")
+
+    if not dupes.empty:
+        print("=== Mismo inmueble en varias publicaciones ===")
+        print(dupes[["fingerprint", "title", "price_norm", "spread_pct"]].head(15).round(1).to_string(index=False), "\n")
+
+    if export_dir:
+        export_dir.mkdir(parents=True, exist_ok=True)
+        for name, frame in [
+            ("zone_stats", stats), ("undervalued", under), ("price_drops", drops),
+            ("stale", stale), ("duplicates", dupes), ("scored", scored),
+        ]:
+            if isinstance(frame, pd.DataFrame) and not frame.empty:
+                frame.to_csv(export_dir / f"{name}.csv", index=False)
+        log.info("CSVs escritos en %s", export_dir)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="inmobot")
+    parser.add_argument("command", choices=["scrape", "analyze", "export"])
+    parser.add_argument("-c", "--config", default="config.yaml")
+    parser.add_argument("-o", "--out", default="data/reports")
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    logging.basicConfig(
+        level=cfg.get_path("logging.level", "INFO"),
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    if args.command == "scrape":
+        cmd_scrape(cfg)
+    elif args.command == "analyze":
+        cmd_analyze(cfg)
+    else:
+        cmd_analyze(cfg, export_dir=Path(args.out))
+
+
+if __name__ == "__main__":
+    main()
+
+
+============================================================
+ARCHIVO: .\inmobot\config.py
+============================================================
+
+"""Carga de configuración.
+
+Un solo YAML manda sobre todo el pipeline. Acá lo leemos, aplicamos defaults
+y resolvemos los valores del tipo "env:NOMBRE_DE_VARIABLE".
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+DEFAULTS: dict[str, Any] = {
+    "search": {
+        "zones": [],
+        "currency": "USD",
+        "price_min": None,
+        "price_max": None,
+        "filters": {},
+        "fx_rates": {"ARS_per_USD": None},
+    },
+    "sources": {},
+    "storage": {"path": "data/listings.db", "keep_snapshots": True},
+    "dedup": {"enabled": True, "area_tolerance_m2": 2, "price_tolerance_pct": 5},
+    "analysis": {
+        "undervalued_threshold_pct": 15,
+        "min_comparables": 20,
+        "stale_days": 60,
+        "outlier_trim_pct": 5,
+    },
+    "alerts": {},
+    "logging": {"level": "INFO"},
+}
+
+
+class Config(dict):
+    """dict con acceso por ruta punteada: cfg.get_path('analysis.stale_days')."""
+
+    def get_path(self, path: str, default: Any = None) -> Any:
+        node: Any = self
+        for part in path.split("."):
+            if not isinstance(node, dict) or part not in node:
+                return default
+            node = node[part]
+        return node if node is not None else default
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _load_dotenv(dotenv_path: str | Path = ".env") -> None:
+    """Carga KEY=VALUE de un .env al entorno, sin pisar variables ya seteadas."""
+    dotenv_path = Path(dotenv_path)
+    if not dotenv_path.exists():
+        return
+    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+def _resolve_env(node: Any) -> Any:
+    """Convierte "env:FOO" en el valor de la variable de entorno FOO."""
+    if isinstance(node, dict):
+        return {k: _resolve_env(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_resolve_env(v) for v in node]
+    if isinstance(node, str) and node.startswith("env:"):
+        return os.environ.get(node[4:])
+    return node
+
+
+def load(path: str | Path = "config.yaml") -> Config:
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"No encuentro {path}. Copiá config.yaml de ejemplo.")
+
+    _load_dotenv(path.parent / ".env")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    merged = _deep_merge(DEFAULTS, raw)
+    cfg = Config(_resolve_env(merged))
+    _validate(cfg)
+    return cfg
+
+
+def _validate(cfg: Config) -> None:
+    if not cfg.get_path("search.zones"):
+        raise ValueError("search.zones está vacío: no hay nada que buscar.")
+
+    pmin = cfg.get_path("search.price_min")
+    pmax = cfg.get_path("search.price_max")
+    if pmin is not None and pmax is not None and pmin > pmax:
+        raise ValueError("search.price_min es mayor que search.price_max.")
+
+    enabled = [
+        name
+        for name, conf in (cfg.get_path("sources", {}) or {}).items()
+        if isinstance(conf, dict) and conf.get("enabled")
+    ]
+    if not enabled:
+        raise ValueError("No hay ninguna fuente habilitada en sources.")
+
+
+============================================================
+ARCHIVO: .\inmobot\db.py
+============================================================
+
+"""Persistencia en SQLite.
+
+Dos tablas:
+  listings         -> estado actual de cada aviso (upsert en cada corrida)
+  price_snapshots  -> una fila por aviso y por corrida en que cambió el precio
+
+La segunda es la que vale oro: con dos meses de corridas sabés qué avisos
+bajaron, cuántas veces y cuánto llevan publicados.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable, Iterator
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS listings (
+    id                TEXT PRIMARY KEY,      -- "<source>:<id nativo>"
+    source            TEXT NOT NULL,
+    source_id         TEXT NOT NULL,
+    url               TEXT,
+    title             TEXT,
+    zone              TEXT,
+    neighborhood      TEXT,
+    city              TEXT,
+    latitude          REAL,
+    longitude         REAL,
+    price             REAL,                  -- en la moneda original
+    currency          TEXT,
+    price_norm        REAL,                  -- normalizado a search.currency
+    maintenance_fee   REAL,
+    covered_area      REAL,
+    total_area        REAL,
+    rooms             INTEGER,
+    bedrooms          INTEGER,
+    bathrooms         INTEGER,
+    age_years         INTEGER,
+    photo_count       INTEGER,
+    fingerprint       TEXT,                  -- para deduplicar entre portales
+    first_seen        TEXT NOT NULL,
+    last_seen         TEXT NOT NULL,
+    active            INTEGER NOT NULL DEFAULT 1,
+    raw               TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_listings_zone        ON listings(zone);
+CREATE INDEX IF NOT EXISTS idx_listings_fingerprint ON listings(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_listings_active      ON listings(active);
+
+CREATE TABLE IF NOT EXISTS price_snapshots (
+    listing_id  TEXT NOT NULL,
+    seen_at     TEXT NOT NULL,
+    price       REAL,
+    currency    TEXT,
+    price_norm  REAL,
+    PRIMARY KEY (listing_id, seen_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_snap_listing ON price_snapshots(listing_id);
+"""
+
+UPSERT_FIELDS = [
+    "id", "source", "source_id", "url", "title", "zone", "neighborhood", "city",
+    "latitude", "longitude", "price", "currency", "price_norm", "maintenance_fee",
+    "covered_area", "total_area", "rooms", "bedrooms", "bathrooms", "age_years",
+    "photo_count", "fingerprint", "raw",
+]
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+@contextmanager
+def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript(SCHEMA)
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def upsert_listings(
+    conn: sqlite3.Connection,
+    listings: Iterable[dict],
+    keep_snapshots: bool = True,
+) -> dict[str, int]:
+    """Inserta o actualiza avisos. Devuelve contadores para el log."""
+    stamp = now_iso()
+    stats = {"new": 0, "updated": 0, "price_changes": 0}
+
+    for item in listings:
+        prev = conn.execute(
+            "SELECT price_norm FROM listings WHERE id = ?", (item["id"],)
+        ).fetchone()
+
+        values = {field: item.get(field) for field in UPSERT_FIELDS}
+
+        if prev is None:
+            columns = ", ".join(UPSERT_FIELDS + ["first_seen", "last_seen", "active"])
+            holders = ", ".join(["?"] * (len(UPSERT_FIELDS) + 3))
+            conn.execute(
+                f"INSERT INTO listings ({columns}) VALUES ({holders})",
+                [values[f] for f in UPSERT_FIELDS] + [stamp, stamp, 1],
+            )
+            stats["new"] += 1
+        else:
+            assignments = ", ".join(f"{f} = ?" for f in UPSERT_FIELDS if f != "id")
+            conn.execute(
+                f"UPDATE listings SET {assignments}, last_seen = ?, active = 1 "
+                "WHERE id = ?",
+                [values[f] for f in UPSERT_FIELDS if f != "id"] + [stamp, item["id"]],
+            )
+            stats["updated"] += 1
+            if prev["price_norm"] != item.get("price_norm"):
+                stats["price_changes"] += 1
+
+        if keep_snapshots:
+            conn.execute(
+                "INSERT OR REPLACE INTO price_snapshots "
+                "(listing_id, seen_at, price, currency, price_norm) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    item["id"], stamp, item.get("price"),
+                    item.get("currency"), item.get("price_norm"),
+                ),
+            )
+
+    return stats
+
+
+def mark_inactive(conn: sqlite3.Connection, seen_ids: set[str], source: str) -> int:
+    """Los avisos de esta fuente que no aparecieron en la corrida se bajan.
+
+    Un aviso que desaparece es señal: se vendió, o lo retiraron.
+    """
+    rows = conn.execute(
+        "SELECT id FROM listings WHERE source = ? AND active = 1", (source,)
+    ).fetchall()
+    gone = [r["id"] for r in rows if r["id"] not in seen_ids]
+    conn.executemany("UPDATE listings SET active = 0 WHERE id = ?", [(g,) for g in gone])
+    return len(gone)
+
+
+============================================================
+ARCHIVO: .\inmobot\normalize.py
+============================================================
+
+"""Normalización, filtrado y deduplicado.
+
+Cada fuente devuelve un dict crudo con su propio vocabulario. Acá lo llevamos
+a un esquema común, convertimos monedas y aplicamos los filtros del config.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import re
+import unicodedata
+from typing import Any
+
+# --------------------------------------------------------------------------- #
+# Moneda
+# --------------------------------------------------------------------------- #
+
+def to_currency(
+    amount: float | None,
+    from_currency: str | None,
+    to_cur: str,
+    fx_rates: dict[str, Any],
+) -> float | None:
+    """Convierte a la moneda de comparación. Devuelve None si no se puede."""
+    if amount is None or not from_currency:
+        return None
+    if from_currency == to_cur:
+        return float(amount)
+
+    rate = fx_rates.get(f"{from_currency}_per_{to_cur}")
+    if rate:
+        return float(amount) / float(rate)
+
+    inverse = fx_rates.get(f"{to_cur}_per_{from_currency}")
+    if inverse:
+        return float(amount) * float(inverse)
+
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# Texto / fingerprint
+# --------------------------------------------------------------------------- #
+
+def slug(text: str | None) -> str:
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def fingerprint(item: dict, area_tolerance: float = 2, price_tolerance_pct: float = 5) -> str:
+    """Huella difusa para detectar el mismo inmueble publicado por varias
+    inmobiliarias. Redondeamos área y precio a "cubetas" del tamaño de la
+    tolerancia para que valores cercanos caigan en la misma clave.
+    """
+    zone = slug(item.get("neighborhood") or item.get("zone"))
+    rooms = item.get("rooms") or 0
+
+    area = item.get("covered_area") or item.get("total_area") or 0
+    area_bucket = round(area / area_tolerance) if area_tolerance else area
+
+    price = item.get("price_norm") or 0
+    step = max(price * price_tolerance_pct / 100, 1) if price else 1
+    price_bucket = round(price / step) if price else 0
+
+    key = f"{zone}|{rooms}|{area_bucket}|{price_bucket}"
+    return hashlib.sha1(key.encode()).hexdigest()[:16]
+
+
+# --------------------------------------------------------------------------- #
+# Filtros
+# --------------------------------------------------------------------------- #
+
+# (clave del config, campo del aviso, comparador)
+_RULES = [
+    ("covered_area_min", "covered_area", "min"),
+    ("covered_area_max", "covered_area", "max"),
+    ("total_area_min", "total_area", "min"),
+    ("total_area_max", "total_area", "max"),
+    ("rooms_min", "rooms", "min"),
+    ("rooms_max", "rooms", "max"),
+    ("bedrooms_min", "bedrooms", "min"),
+    ("bedrooms_max", "bedrooms", "max"),
+    ("max_maintenance_fee", "maintenance_fee", "max"),
+    ("max_age_years", "age_years", "max"),
+]
+
+
+def passes_filters(item: dict, search_cfg: dict) -> tuple[bool, str]:
+    """Aplica los filtros del config. Devuelve (pasa, motivo_del_rechazo)."""
+    filters = search_cfg.get("filters") or {}
+
+    price = item.get("price_norm")
+    pmin, pmax = search_cfg.get("price_min"), search_cfg.get("price_max")
+    if price is None:
+        return False, "sin precio normalizable"
+    if pmin is not None and price < pmin:
+        return False, "precio por debajo del rango"
+    if pmax is not None and price > pmax:
+        return False, "precio por encima del rango"
+
+    for cfg_key, field, mode in _RULES:
+        limit = filters.get(cfg_key)
+        if limit is None:
+            continue
+        value = item.get(field)
+        if value is None:
+            continue  # dato ausente no descalifica: mejor revisarlo a mano
+        if mode == "min" and value < limit:
+            return False, f"{field} menor al mínimo"
+        if mode == "max" and value > limit:
+            return False, f"{field} mayor al máximo"
+
+    if filters.get("require_photos") and not (item.get("photo_count") or 0):
+        return False, "sin fotos"
+
+    return True, ""
+
+
+def normalize(item: dict, search_cfg: dict, dedup_cfg: dict) -> dict:
+    """Completa price_norm y fingerprint sobre un aviso ya mapeado."""
+    item["price_norm"] = to_currency(
+        item.get("price"),
+        item.get("currency"),
+        search_cfg.get("currency", "USD"),
+        search_cfg.get("fx_rates") or {},
+    )
+    item["fingerprint"] = fingerprint(
+        item,
+        dedup_cfg.get("area_tolerance_m2", 2),
+        dedup_cfg.get("price_tolerance_pct", 5),
+    )
+    return item
+
+
+============================================================
+ARCHIVO: .\inmobot\__init__.py
+============================================================
+
+
+
+============================================================
+ARCHIVO: .\inmobot\__main__.py
+============================================================
+
+from .cli import main
+
+if __name__ == "__main__":
+    main()
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\argenprop.py
+============================================================
+
+"""Fuente: Argenprop.
+
+Sin API pública: Playwright igual que Zonaprop. El robots.txt solo permite
+indexar `?pagina-1`, `?pagina-2` y `?pagina-3` (`Disallow: /*?pagina-`
+general) — tope duro de 3 páginas por búsqueda.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import time
+from typing import Iterator
+
+from ..normalize import slug
+from ._browser import browser_page, is_bot_challenge
+from ._text import parse_number, parse_price
+
+log = logging.getLogger(__name__)
+
+BASE = "https://www.argenprop.com"
+MAX_PAGES = 3
+
+CARD_SELECTOR = "a.card"
+
+# Clase del ícono (basico1-icon-<esto>) -> campo de nuestro esquema.
+_ICON_MAP = {
+    "superficie_cubierta": "covered_area",
+    "superficie_total": "total_area",
+    "cantidad_ambientes": "rooms",
+    "cantidad_dormitorios": "bedrooms",
+    "cantidad_banos": "bathrooms",
+    "antiguedad": "age_years",
+}
+
+
+class ArgenpropSource:
+    name = "argenprop"
+
+    def __init__(self, conf: dict):
+        self.property_slug = conf.get("property_slug", "departamentos")
+        self.operation_slug = conf.get("operation_slug", "venta")
+        self.delay = float(conf.get("rate_limit_seconds", 4.0))
+        self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+
+    def _url(self, zone: str, page: int) -> str:
+        url = f"{BASE}/{self.property_slug}/{self.operation_slug}/{slug(zone)}"
+        if page > 1:
+            url += f"?pagina-{page}"
+        return url
+
+    # ---------------------------------------------------------------- #
+
+    def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        with browser_page() as page_obj:
+            for page_num in range(1, self.max_pages + 1):
+                url = self._url(zone, page_num)
+                try:
+                    page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
+                except Exception as exc:
+                    if is_bot_challenge(page_obj):
+                        log.warning(
+                            "[argenprop] Cloudflare pidió verificación en %s (pág %d) — "
+                            "corto acá, no la esquivamos. Quedaron %d página(s).",
+                            zone, page_num, page_num - 1,
+                        )
+                    else:
+                        log.info(
+                            "[argenprop] corto en %s (pág %d): %s", zone, page_num, exc
+                        )
+                    return
+
+                cards = page_obj.query_selector_all(CARD_SELECTOR)
+                if not cards:
+                    return
+
+                for card in cards:
+                    item = self._map(card, zone)
+                    if item:
+                        yield item
+
+                if page_num < self.max_pages:
+                    time.sleep(self.delay)
+
+    # ---------------------------------------------------------------- #
+
+    def _map(self, card, zone: str) -> dict | None:
+        source_id = card.get_attribute("data-item-card")
+        href = card.get_attribute("href")
+        if not source_id or not href:
+            return None
+
+        price_el = card.query_selector(".card__price")
+        expenses_el = card.query_selector(".card__expenses")
+        title_el = card.query_selector(".card__title")
+        subtitle_el = card.query_selector(".card__title--primary")
+        address_el = card.query_selector(".card__address")
+        counter_el = card.query_selector("[data-photo-counter]")
+
+        price, currency = parse_price(price_el.inner_text() if price_el else None)
+        neighborhood, city = _parse_subtitle(
+            subtitle_el.inner_text() if subtitle_el else None
+        )
+        title = (title_el.inner_text().strip() if title_el else None) or zone
+
+        item: dict = {
+            "id": f"{self.name}:{source_id}",
+            "source": self.name,
+            "source_id": source_id,
+            "url": BASE + href if href.startswith("/") else href,
+            "title": title,
+            "zone": zone,
+            "price": price,
+            "currency": currency,
+            "neighborhood": neighborhood,
+            "city": city,
+        }
+
+        if address_el:
+            item["address"] = address_el.inner_text().strip()
+
+        if expenses_el:
+            raw = expenses_el.get_attribute("title") or expenses_el.inner_text()
+            item["maintenance_fee"] = parse_number(raw)
+
+        if counter_el:
+            match = re.search(r"(\d+)", counter_el.inner_text())
+            item["photo_count"] = int(match.group(1)) if match else 1
+        else:
+            item["photo_count"] = 1 if card.query_selector("img") else 0
+
+        for li in card.query_selector_all(".card__main-features li"):
+            icon = li.query_selector("i")
+            cls = icon.get_attribute("class") if icon else ""
+            field = next((f for key, f in _ICON_MAP.items() if key in (cls or "")), None)
+            if field:
+                item[field] = parse_number(li.inner_text())
+
+        if item.get("rooms") is None:
+            match = re.search(r"(\d+)\s*ambiente", title, re.IGNORECASE)
+            if match:
+                item["rooms"] = parse_number(match.group(1))
+
+        return item
+
+
+def _parse_subtitle(text: str | None) -> tuple[str | None, str | None]:
+    """"Departamento en Venta en Caballito, CABA" -> ("Caballito", "CABA").
+
+    Usamos el ÚLTIMO " en " antes de la ciudad (no el primero: "Venta" y el
+    tipo de propiedad también llevan "en" adelante).
+    """
+    if not text:
+        return None, None
+    head, _, city = text.strip().rpartition(",")
+    if not head:
+        head, city = city, None
+    idx = head.lower().rfind(" en ")
+    neighborhood = head[idx + 4 :].strip() if idx != -1 else head.strip()
+    return neighborhood or None, (city.strip() if city else None)
+
+
+def build(conf: dict) -> ArgenpropSource:
+    return ArgenpropSource(conf)
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\mercadolibre.py
+============================================================
+
+"""Fuente: MercadoLibre.
+
+Arrancamos por acá porque tiene API pública, JSON estructurado y cero
+anti-bot. Todo el resto del pipeline se prueba contra datos reales antes de
+pelearse con Playwright.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import Iterator
+
+import httpx
+
+log = logging.getLogger(__name__)
+
+API = "https://api.mercadolibre.com"
+
+
+def _client_credentials_token(client_id: str, client_secret: str) -> str:
+    """Pide un access_token de aplicación (dura 6hs, sin login de usuario).
+
+    No hace falta refresh_token ni persistir nada: client_id/secret alcanzan
+    para pedir uno nuevo en cualquier momento.
+    """
+    response = httpx.post(
+        f"{API}/oauth/token",
+        headers={"accept": "application/json"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        },
+        timeout=20.0,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+# Atributos de ML -> nuestro esquema. Agregá acá si querés más campos.
+ATTRIBUTE_MAP = {
+    "COVERED_AREA": ("covered_area", float),
+    "TOTAL_AREA": ("total_area", float),
+    "ROOMS": ("rooms", int),
+    "BEDROOMS": ("bedrooms", int),
+    "FULL_BATHROOMS": ("bathrooms", int),
+    "MAINTENANCE_FEE": ("maintenance_fee", float),
+    "PROPERTY_AGE": ("age_years", int),
+}
+
+
+class MercadoLibreSource:
+    name = "mercadolibre"
+
+    def __init__(self, conf: dict):
+        self.conf = conf
+        self.site = conf.get("site", "MLA")
+        self.category = conf.get("category")
+        self.api_filters = conf.get("api_filters") or {}
+        self.page_size = int(conf.get("page_size", 50))
+        self.max_results = int(conf.get("max_results_per_zone", 1000))
+        self.delay = float(conf.get("rate_limit_seconds", 0.4))
+
+        headers = {"User-Agent": "inmobot/0.1"}
+        token = self._get_token(conf)
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        self.client = httpx.Client(headers=headers, timeout=20.0)
+
+    def _get_token(self, conf: dict) -> str | None:
+        oauth = conf.get("oauth") or {}
+        client_id = oauth.get("client_id")
+        client_secret = oauth.get("client_secret")
+        if client_id and client_secret:
+            try:
+                token = _client_credentials_token(client_id, client_secret)
+                log.info("Access_token de MercadoLibre obtenido vía client_credentials.")
+                return token
+            except httpx.HTTPError as exc:
+                log.error("No pude pedir access_token (client_credentials) de MercadoLibre: %s", exc)
+        return conf.get("access_token")
+
+    # ---------------------------------------------------------------- #
+
+    def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        """Devuelve avisos mapeados a nuestro esquema para una zona."""
+        offset = 0
+        while offset < self.max_results:
+            params = {
+                "q": zone,
+                "category": self.category,
+                "limit": min(self.page_size, self.max_results - offset),
+                "offset": offset,
+                **self.api_filters,
+            }
+
+            try:
+                response = self.client.get(f"{API}/sites/{self.site}/search", params=params)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (401, 403):
+                    if "PolicyAgent" in exc.response.text:
+                        log.error(
+                            "MercadoLibre bloqueó la búsqueda (%s, PolicyAgent) con un "
+                            "access_token válido. Suele ser porque la app está en "
+                            "sandbox_mode o no está certificada — revisá el estado de "
+                            "tu app en developers.mercadolibre.com.ar/devcenter.",
+                            exc.response.status_code,
+                        )
+                    else:
+                        log.error(
+                            "MercadoLibre pidió autenticación (%s). Completá "
+                            "sources.mercadolibre.oauth o access_token.",
+                            exc.response.status_code,
+                        )
+                else:
+                    log.error("Error HTTP %s en zona %s", exc.response.status_code, zone)
+                return
+            except httpx.HTTPError as exc:
+                log.error("Fallo de red en zona %s: %s", zone, exc)
+                return
+
+            payload = response.json()
+            results = payload.get("results") or []
+            if not results:
+                return
+
+            for raw in results:
+                yield self._map(raw, zone)
+
+            total = payload.get("paging", {}).get("total", 0)
+            offset += len(results)
+            if offset >= total:
+                return
+            time.sleep(self.delay)
+
+    # ---------------------------------------------------------------- #
+
+    def _map(self, raw: dict, zone: str) -> dict:
+        item: dict = {
+            "id": f"{self.name}:{raw.get('id')}",
+            "source": self.name,
+            "source_id": raw.get("id"),
+            "url": raw.get("permalink"),
+            "title": raw.get("title"),
+            "zone": zone,
+            "price": raw.get("price"),
+            "currency": raw.get("currency_id"),
+            "photo_count": len(raw.get("pictures") or []) or (
+                1 if raw.get("thumbnail") else 0
+            ),
+        }
+
+        location = raw.get("location") or raw.get("seller_address") or {}
+        item["neighborhood"] = (location.get("neighborhood") or {}).get("name")
+        item["city"] = (location.get("city") or {}).get("name")
+        item["latitude"] = _as(location.get("latitude"), float)
+        item["longitude"] = _as(location.get("longitude"), float)
+
+        for attr in raw.get("attributes") or []:
+            mapping = ATTRIBUTE_MAP.get(attr.get("id"))
+            if not mapping:
+                continue
+            field, caster = mapping
+            value = (attr.get("value_struct") or {}).get("number")
+            if value is None:
+                value = attr.get("value_name")
+            item[field] = _as(value, caster)
+
+        return item
+
+
+def _as(value, caster):
+    if value is None:
+        return None
+    try:
+        if isinstance(value, str):
+            value = value.split()[0].replace(",", ".")
+        return caster(float(value))
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
+def build(conf: dict) -> MercadoLibreSource:
+    return MercadoLibreSource(conf)
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\zonaprop.py
+============================================================
+
+"""Fuente: Zonaprop.
+
+Sin API pública: hay que renderizar con Playwright. El robots.txt del sitio
+permite indexar `*-pagina-2.html` a `*-pagina-5.html` pero no más allá
+(`Disallow: /*pagina-*.html` general, con `Allow` puntual hasta la 5) — lo
+tomamos como tope duro de páginas por búsqueda, no como sugerencia.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import time
+from typing import Iterator
+
+from ..normalize import slug
+from ._browser import browser_page, is_bot_challenge
+from ._text import parse_number, parse_price
+
+log = logging.getLogger(__name__)
+
+BASE = "https://www.zonaprop.com.ar"
+MAX_PAGES = 5
+
+CARD_SELECTOR = "[data-posting-type]"
+
+_FEATURE_PATTERNS = [
+    (re.compile(r"([\d.,]+)\s*m²\s*tot"), "total_area"),
+    (re.compile(r"([\d.,]+)\s*m²\s*cub"), "covered_area"),
+    (re.compile(r"(\d+)\s*amb"), "rooms"),
+    (re.compile(r"(\d+)\s*dorm"), "bedrooms"),
+    (re.compile(r"(\d+)\s*baño"), "bathrooms"),
+]
+
+
+class ZonapropSource:
+    name = "zonaprop"
+
+    def __init__(self, conf: dict):
+        self.property_slug = conf.get("property_slug", "departamentos")
+        self.operation_slug = conf.get("operation_slug", "venta")
+        self.delay = float(conf.get("rate_limit_seconds", 4.0))
+        self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+
+    def _url(self, zone: str, page: int) -> str:
+        base = f"{self.property_slug}-{self.operation_slug}-{slug(zone)}"
+        if page == 1:
+            return f"{BASE}/{base}.html"
+        return f"{BASE}/{base}-pagina-{page}.html"
+
+    # ---------------------------------------------------------------- #
+
+    def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        with browser_page() as page_obj:
+            for page_num in range(1, self.max_pages + 1):
+                url = self._url(zone, page_num)
+                try:
+                    page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
+                except Exception as exc:
+                    if is_bot_challenge(page_obj):
+                        log.warning(
+                            "[zonaprop] Cloudflare pidió verificación en %s (pág %d) — "
+                            "corto acá, no la esquivamos. Quedaron %d página(s).",
+                            zone, page_num, page_num - 1,
+                        )
+                    else:
+                        log.info(
+                            "[zonaprop] corto en %s (pág %d): %s", zone, page_num, exc
+                        )
+                    return
+
+                cards = page_obj.query_selector_all(CARD_SELECTOR)
+                if not cards:
+                    return
+
+                for card in cards:
+                    item = self._map(card, zone)
+                    if item:
+                        yield item
+
+                if page_num < self.max_pages:
+                    time.sleep(self.delay)
+
+    # ---------------------------------------------------------------- #
+
+    def _map(self, card, zone: str) -> dict | None:
+        source_id = card.get_attribute("data-id")
+        href = card.get_attribute("data-to-posting")
+        if not source_id or not href:
+            return None
+
+        price_el = card.query_selector('[data-qa="POSTING_CARD_PRICE"]')
+        expenses_el = card.query_selector('[data-qa="expensas"]')
+        features_el = card.query_selector('[data-qa="POSTING_CARD_FEATURES"]')
+        location_el = card.query_selector('[data-qa="POSTING_CARD_LOCATION"]')
+        desc_el = card.query_selector('[data-qa="POSTING_CARD_DESCRIPTION"] a')
+        has_photo = card.query_selector('[data-qa="POSTING_CARD_GALLERY"] img') is not None
+
+        price, currency = parse_price(price_el.inner_text() if price_el else None)
+        neighborhood, city = _parse_location(
+            location_el.inner_text() if location_el else None
+        )
+
+        # La foto principal es lazy (carga con hover/scroll) y a veces solo
+        # queda el ícono "Imagen siguiente" en el momento del scrape — nada
+        # confiable como título. Usamos el arranque de la descripción, que
+        # siempre está en el HTML inicial.
+        title = _short_title(desc_el.inner_text() if desc_el else None) or zone
+
+        item: dict = {
+            "id": f"{self.name}:{source_id}",
+            "source": self.name,
+            "source_id": source_id,
+            "url": BASE + href if href.startswith("/") else href,
+            "title": title,
+            "zone": zone,
+            "price": price,
+            "currency": currency,
+            "neighborhood": neighborhood,
+            "city": city,
+            "photo_count": 1 if has_photo else 0,
+        }
+        item.update(_parse_features(features_el.inner_text() if features_el else ""))
+        if expenses_el:
+            item["maintenance_fee"] = parse_number(expenses_el.inner_text())
+        return item
+
+
+def _short_title(text: str | None, max_len: int = 120) -> str | None:
+    """Primeros ~120 caracteres de la descripción, como sustituto de título
+    (Zonaprop no expone un título corto separado en la card de resultados)."""
+    if not text:
+        return None
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rsplit(" ", 1)[0] + "…"
+
+
+def _parse_location(text: str | None) -> tuple[str | None, str | None]:
+    if not text:
+        return None, None
+    parts = [p.strip() for p in text.split(",")]
+    neighborhood = parts[0] if parts else None
+    city = parts[1] if len(parts) > 1 else None
+    return neighborhood, city
+
+
+def _parse_features(text: str) -> dict:
+    out: dict = {}
+    for pattern, field in _FEATURE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            out[field] = parse_number(match.group(1))
+    return out
+
+
+def build(conf: dict) -> ZonapropSource:
+    return ZonapropSource(conf)
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\_browser.py
+============================================================
+
+"""Utilidades compartidas para fuentes que necesitan renderizar JS (Playwright).
+
+Zonaprop y Argenprop no tienen API pública: hay que abrir la página como un
+navegador real. Un solo lugar para el setup del browser (headers, user-agent)
+para no repetirlo en cada fuente.
+"""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+
+from playwright.sync_api import sync_playwright
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+
+def is_bot_challenge(page) -> bool:
+    """Detecta la pantalla de verificación de Cloudflare ("Un momento...").
+
+    Zonaprop y Argenprop la disparan típicamente a partir de la 2da
+    navegación dentro de la misma sesión headless, incluso respetando el
+    rate limit. No la esquivamos (no es el objetivo del proyecto arriesgar
+    un ban de IP por más velocidad) — solo la reconocemos para cortar la
+    paginación con un mensaje claro en vez de un timeout genérico.
+    """
+    try:
+        title = (page.title() or "").lower()
+        body = page.inner_text("body")[:500].lower()
+    except Exception:
+        return False
+    return "verificación de seguridad" in body or "un momento" in title
+
+
+@contextmanager
+def browser_page():
+    """Contexto con una página de Chromium headless lista para navegar."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=USER_AGENT,
+            locale="es-AR",
+            viewport={"width": 1366, "height": 900},
+        )
+        page = context.new_page()
+        try:
+            yield page
+        finally:
+            context.close()
+            browser.close()
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\_text.py
+============================================================
+
+"""Parseo de texto compartido entre fuentes basadas en scraping de HTML."""
+
+from __future__ import annotations
+
+import re
+
+
+def parse_number(text: str | None) -> float | None:
+    """"1.234,5" (miles con punto, decimales con coma, estilo AR) -> 1234.5."""
+    if not text:
+        return None
+    match = re.search(r"[\d.,]+", text)
+    if not match:
+        return None
+    raw = match.group(0).replace(".", "").replace(",", ".")
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def parse_price(text: str | None) -> tuple[float | None, str | None]:
+    if not text:
+        return None, None
+    upper = text.upper()
+    if "USD" in upper or "U$S" in upper:
+        currency = "USD"
+    elif "$" in text:
+        currency = "ARS"
+    else:
+        currency = None
+    return parse_number(text), currency
+
+
+============================================================
+ARCHIVO: .\inmobot\sources\__init__.py
+============================================================
+

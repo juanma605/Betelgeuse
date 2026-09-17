@@ -137,14 +137,28 @@ def upsert_listings(
     return stats
 
 
-def mark_inactive(conn: sqlite3.Connection, seen_ids: set[str], source: str) -> int:
+def mark_inactive(
+    conn: sqlite3.Connection,
+    seen_ids: set[str],
+    source: str,
+    zones: list[str] | None = None,
+) -> int:
     """Los avisos de esta fuente que no aparecieron en la corrida se bajan.
 
-    Un aviso que desaparece es señal: se vendió, o lo retiraron.
+    Un aviso que desaparece es señal: se vendió, o lo retiraron. Pero si
+    `zones` viene dado, solo se consideran avisos de esas zonas: una zona que
+    la fuente no pudo terminar de leer (bloqueo anti-bot, 403, etc.) no debe
+    hacer que sus avisos reales se den de baja por no haber aparecido.
     """
-    rows = conn.execute(
-        "SELECT id FROM listings WHERE source = ? AND active = 1", (source,)
-    ).fetchall()
+    query = "SELECT id FROM listings WHERE source = ? AND active = 1"
+    params: list = [source]
+    if zones is not None:
+        if not zones:
+            return 0
+        query += f" AND zone IN ({','.join('?' * len(zones))})"
+        params.extend(zones)
+
+    rows = conn.execute(query, params).fetchall()
     gone = [r["id"] for r in rows if r["id"] not in seen_ids]
     conn.executemany("UPDATE listings SET active = 0 WHERE id = ?", [(g,) for g in gone])
     return len(gone)

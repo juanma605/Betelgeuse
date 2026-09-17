@@ -61,6 +61,7 @@ class MercadoLibreSource:
         self.page_size = int(conf.get("page_size", 50))
         self.max_results = int(conf.get("max_results_per_zone", 1000))
         self.delay = float(conf.get("rate_limit_seconds", 0.4))
+        self.incomplete_zones: set[str] = set()
 
         headers = {"User-Agent": "inmobot/0.1"}
         token = self._get_token(conf)
@@ -116,9 +117,11 @@ class MercadoLibreSource:
                         )
                 else:
                     log.error("Error HTTP %s en zona %s", exc.response.status_code, zone)
+                self.incomplete_zones.add(zone)
                 return
             except httpx.HTTPError as exc:
                 log.error("Fallo de red en zona %s: %s", zone, exc)
+                self.incomplete_zones.add(zone)
                 return
 
             payload = response.json()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,13 @@ from .config import load as load_config
 from .sources import argenprop, mercadolibre, zonaprop
 
 log = logging.getLogger("inmobot")
+
+# La consola de Windows no siempre usa UTF-8 por default: sin esto, los
+# títulos/zonas con tildes o ñ salen como "�" en la tabla que imprime
+# pandas (no es un bug de pandas, es la codepage de la terminal).
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
 
 SOURCE_BUILDERS = {
     "mercadolibre": mercadolibre.build,
@@ -57,7 +65,18 @@ def cmd_scrape(cfg) -> None:
                     seen_ids.add(item["id"])
 
             stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
-            gone = db.mark_inactive(conn, seen_ids, name)
+
+            # Si una zona se cortó a mitad de camino (bloqueo anti-bot, 403,
+            # etc.) sus avisos reales no van a estar en seen_ids — no hay que
+            # darlos de baja como si el aviso hubiera desaparecido de verdad.
+            incomplete = getattr(source, "incomplete_zones", set())
+            complete_zones = [z for z in search_cfg["zones"] if z not in incomplete]
+            gone = db.mark_inactive(conn, seen_ids, name, zones=complete_zones)
+            if incomplete:
+                log.info(
+                    "[%s] zona(s) incompleta(s), no se dan de baja avisos ahí: %s",
+                    name, ", ".join(sorted(incomplete)),
+                )
             log.info(
                 "[%s] %d nuevos, %d actualizados, %d cambios de precio, "
                 "%d dados de baja, %d descartados por filtros",

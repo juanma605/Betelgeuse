@@ -42,6 +42,7 @@ class ArgenpropSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+        self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
         url = f"{BASE}/{self.property_slug}/{self.operation_slug}/{slug(zone)}"
@@ -59,6 +60,7 @@ class ArgenpropSource:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                     page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
                 except Exception as exc:
+                    self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
                             "[argenprop] Cloudflare pidió verificación en %s (pág %d) — "
