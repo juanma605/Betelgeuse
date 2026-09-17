@@ -15,13 +15,14 @@ import pandas as pd
 
 from . import analyze, db, normalize
 from .config import load as load_config
-from .sources import mercadolibre
+from .sources import argenprop, mercadolibre, zonaprop
 
 log = logging.getLogger("inmobot")
 
-# Registro de fuentes. Sumá acá zonaprop/argenprop cuando los implementes.
 SOURCE_BUILDERS = {
     "mercadolibre": mercadolibre.build,
+    "zonaprop": zonaprop.build,
+    "argenprop": argenprop.build,
 }
 
 

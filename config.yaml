@@ -51,17 +51,35 @@ sources:
     max_results_per_zone: 1000  # tope duro de la API (offset máx 1000)
     page_size: 50
     rate_limit_seconds: 0.4
-    # Opcional: token de acceso si tu cuenta lo requiere. Podés usar
-    # "env:ML_ACCESS_TOKEN" para leerlo de una variable de entorno.
-    access_token: null
+    # ML cerró la búsqueda pública: hace falta un access_token vigente.
+    # Con `oauth` (client_id + client_secret de tu app) se pide uno nuevo
+    # por client_credentials en cada corrida — no vence, no hay que
+    # loguearse nunca ni guardar nada. `access_token` de abajo es solo el
+    # fallback manual si no completás `oauth`.
+    oauth:
+      client_id: "env:ML_CLIENT_ID"
+      client_secret: "env:ML_CLIENT_SECRET"
+    access_token: "env:ML_ACCESS_TOKEN"
 
   zonaprop:
-    enabled: false              # requiere Playwright — ver README
+    enabled: true
+    # Arman la URL como <property_slug>-<operation_slug>-<zona>.html
+    property_slug: departamentos   # departamentos | casas | ph
+    operation_slug: venta          # venta | alquiler | alquiler-temporario
     rate_limit_seconds: 4.0
+    # El robots.txt del sitio solo permite indexar hasta la página 5
+    # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
+    # Es un tope duro: aunque pongas más, el código lo recorta a 5.
+    max_pages: 5
 
   argenprop:
-    enabled: false
+    enabled: true
+    # Arman la URL como /<property_slug>/<operation_slug>/<zona>
+    property_slug: departamentos   # departamentos | casas | ph
+    operation_slug: venta          # venta | alquiler
     rate_limit_seconds: 4.0
+    # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
+    max_pages: 3
 
 storage:
   path: "data/listings.db"

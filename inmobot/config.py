@@ -57,6 +57,19 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+def _load_dotenv(dotenv_path: str | Path = ".env") -> None:
+    """Carga KEY=VALUE de un .env al entorno, sin pisar variables ya seteadas."""
+    dotenv_path = Path(dotenv_path)
+    if not dotenv_path.exists():
+        return
+    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
 def _resolve_env(node: Any) -> Any:
     """Convierte "env:FOO" en el valor de la variable de entorno FOO."""
     if isinstance(node, dict):
@@ -73,6 +86,7 @@ def load(path: str | Path = "config.yaml") -> Config:
     if not path.exists():
         raise FileNotFoundError(f"No encuentro {path}. Copiá config.yaml de ejemplo.")
 
+    _load_dotenv(path.parent / ".env")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     merged = _deep_merge(DEFAULTS, raw)
     cfg = Config(_resolve_env(merged))

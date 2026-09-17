@@ -17,6 +17,27 @@ log = logging.getLogger(__name__)
 
 API = "https://api.mercadolibre.com"
 
+
+def _client_credentials_token(client_id: str, client_secret: str) -> str:
+    """Pide un access_token de aplicación (dura 6hs, sin login de usuario).
+
+    No hace falta refresh_token ni persistir nada: client_id/secret alcanzan
+    para pedir uno nuevo en cualquier momento.
+    """
+    response = httpx.post(
+        f"{API}/oauth/token",
+        headers={"accept": "application/json"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        },
+        timeout=20.0,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
 # Atributos de ML -> nuestro esquema. Agregá acá si querés más campos.
 ATTRIBUTE_MAP = {
     "COVERED_AREA": ("covered_area", float),
@@ -42,10 +63,23 @@ class MercadoLibreSource:
         self.delay = float(conf.get("rate_limit_seconds", 0.4))
 
         headers = {"User-Agent": "inmobot/0.1"}
-        token = conf.get("access_token")
+        token = self._get_token(conf)
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self.client = httpx.Client(headers=headers, timeout=20.0)
+
+    def _get_token(self, conf: dict) -> str | None:
+        oauth = conf.get("oauth") or {}
+        client_id = oauth.get("client_id")
+        client_secret = oauth.get("client_secret")
+        if client_id and client_secret:
+            try:
+                token = _client_credentials_token(client_id, client_secret)
+                log.info("Access_token de MercadoLibre obtenido vía client_credentials.")
+                return token
+            except httpx.HTTPError as exc:
+                log.error("No pude pedir access_token (client_credentials) de MercadoLibre: %s", exc)
+        return conf.get("access_token")
 
     # ---------------------------------------------------------------- #
 
@@ -66,11 +100,20 @@ class MercadoLibreSource:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code in (401, 403):
-                    log.error(
-                        "MercadoLibre pidió autenticación (%s). Generá un token y "
-                        "ponelo en sources.mercadolibre.access_token.",
-                        exc.response.status_code,
-                    )
+                    if "PolicyAgent" in exc.response.text:
+                        log.error(
+                            "MercadoLibre bloqueó la búsqueda (%s, PolicyAgent) con un "
+                            "access_token válido. Suele ser porque la app está en "
+                            "sandbox_mode o no está certificada — revisá el estado de "
+                            "tu app en developers.mercadolibre.com.ar/devcenter.",
+                            exc.response.status_code,
+                        )
+                    else:
+                        log.error(
+                            "MercadoLibre pidió autenticación (%s). Completá "
+                            "sources.mercadolibre.oauth o access_token.",
+                            exc.response.status_code,
+                        )
                 else:
                     log.error("Error HTTP %s en zona %s", exc.response.status_code, zone)
                 return
