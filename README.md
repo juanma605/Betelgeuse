@@ -39,7 +39,7 @@ Todo lo que cambia entre búsquedas está en `config.yaml`, no en el código:
 | `sources.*` | qué portales usar, rate limit, filtros nativos de cada API |
 | `dedup` | tolerancias de área y precio para el fingerprint |
 | `analysis` | umbral de subvaluado, mínimo de comparables, días de antigüedad, recorte de outliers |
-| `alerts.telegram` | notificaciones por score de oportunidad |
+| `alerts.email` | notificaciones por mail según score de oportunidad |
 
 Para cambiar de venta a alquiler, o de departamento a PH, tocás
 `sources.mercadolibre.category` (ver el mapeo de IDs en el comentario de
@@ -91,8 +91,9 @@ No pude probar contra la API en vivo, así que revisá esto:
 2. **Regresión en vez de mediana.** `find_undervalued` compara contra la mediana
    de zona/ambientes. Con 2.000+ avisos, una regresión sobre área, ambientes,
    antigüedad y barrio te va a dar un precio esperado mucho más fino.
-3. **Bot de Telegram** leyendo `alerts.telegram` y disparando cuando aparece algo
-   sobre `min_score`.
+3. **Alertas por mail** (`inmobot/alerts.py`, ya implementado) leyendo
+   `alerts.email` y disparando cuando aparece algo sobre `min_score`. Solo
+   falta completar host/usuario/contraseña SMTP y poner `enabled: true`.
 4. **Geocoding** de los avisos sin lat/long, para análisis por distancia a
    subte/parques en vez de por barrio.
 

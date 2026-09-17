@@ -10,6 +10,10 @@ search:
     - "Villa Crespo"
     - "Almagro"
     - "Caballito"
+    - "Palermo"
+    - "Belgrano"
+    - "Recoleta"
+    - "Nuñez"
 
   # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
   # usando fx_rates (abajo) o se descartan si no hay cotización.
@@ -37,7 +41,12 @@ search:
 
 sources:
   mercadolibre:
-    enabled: true
+    # Apagada: la búsqueda pública de ML quedó atrás de un gate de
+    # "certification_status: not_certified" a nivel de la app — no es un
+    # tema de token (probamos con uno válido y sigue dando 403 PolicyAgent),
+    # y conseguir la certificación no es viable ahora. Queda todo el código
+    # y el config listos por si en algún momento se resuelve del otro lado.
+    enabled: false
     site: MLA                   # MLA=Argentina, MLU=Uruguay, MLC=Chile...
     # ML dejó de modelar tipo de propiedad + operación como filtros de
     # atributo (OPERATION/PROPERTY_TYPE ya no existen) y ahora los maneja
@@ -56,9 +65,9 @@ sources:
     # por client_credentials en cada corrida — no vence, no hay que
     # loguearse nunca ni guardar nada. `access_token` de abajo es solo el
     # fallback manual si no completás `oauth`.
-    oauth:
-      client_id: "env:ML_CLIENT_ID"
-      client_secret: "env:ML_CLIENT_SECRET"
+    # oauth:
+    #  client_id: "env:ML_CLIENT_ID"
+    #  client_secret: "env:ML_CLIENT_SECRET"
     access_token: "env:ML_ACCESS_TOKEN"
 
   zonaprop:
@@ -80,6 +89,17 @@ sources:
     rate_limit_seconds: 4.0
     # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
     max_pages: 3
+
+  mudafy:
+    enabled: true
+    # Arma la URL como /<operation_slug>/<property_slug>/<zone_prefix><zona>
+    property_slug: departamentos   # departamentos | casas | ph
+    operation_slug: venta          # venta | alquiler
+    zone_prefix: "caba-"           # prefijo de Capital Federal en las URLs de Mudafy
+    rate_limit_seconds: 4.0
+    # Mudafy no tiene paginación crawleable (mapa + lista de una sola carga,
+    # sin botón "más" ni links de página) y su robots.txt prohíbe cualquier
+    # URL con query string. Tope real: ~25 avisos por zona por corrida.
 
 storage:
   path: "data/listings.db"
@@ -106,10 +126,15 @@ analysis:
   outlier_trim_pct: 5
 
 alerts:
-  telegram:
-    enabled: false
-    bot_token: "env:TELEGRAM_BOT_TOKEN"
-    chat_id: "env:TELEGRAM_CHAT_ID"
+  email:
+    enabled: true
+    smtp_host: "smtp.gmail.com"        # ej. smtp.gmail.com
+    smtp_port: 587
+    smtp_user: "juanmartinsantamarina@gmail.com"
+    smtp_password: "env:SMTP_PASSWORD"  # con Gmail: contraseña de aplicación, no la de tu cuenta. Va en .env, nunca acá.
+    from_addr: "juanmartinsantamarina@gmail.com"
+    to_addrs:
+      - "juanmartinsantamarina@gmail.com"
     # Avisar solo si el aviso supera este score de oportunidad (0-100).
     min_score: 70
 

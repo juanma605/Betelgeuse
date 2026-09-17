@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import analyze, db, normalize
+from . import alerts, analyze, db, normalize
 from .config import load as load_config
-from .sources import argenprop, mercadolibre, zonaprop
+from .sources import argenprop, mercadolibre, mudafy, zonaprop
 
 log = logging.getLogger("inmobot")
 
@@ -31,6 +31,7 @@ SOURCE_BUILDERS = {
     "mercadolibre": mercadolibre.build,
     "zonaprop": zonaprop.build,
     "argenprop": argenprop.build,
+    "mudafy": mudafy.build,
 }
 
 
@@ -134,6 +135,10 @@ def cmd_analyze(cfg, export_dir: Path | None = None) -> None:
             if isinstance(frame, pd.DataFrame) and not frame.empty:
                 frame.to_csv(export_dir / f"{name}.csv", index=False)
         log.info("CSVs escritos en %s", export_dir)
+
+    sent = alerts.send_email_alerts(scored, cfg.get_path("alerts.email", {}) or {})
+    if sent:
+        log.info("Alerta por mail: %d aviso(s) por encima del score mínimo.", sent)
 
 
 def main() -> None:

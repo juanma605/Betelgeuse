@@ -772,6 +772,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -781,6 +782,13 @@ from .config import load as load_config
 from .sources import argenprop, mercadolibre, zonaprop
 
 log = logging.getLogger("inmobot")
+
+# La consola de Windows no siempre usa UTF-8 por default: sin esto, los
+# títulos/zonas con tildes o ñ salen como "�" en la tabla que imprime
+# pandas (no es un bug de pandas, es la codepage de la terminal).
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
 
 SOURCE_BUILDERS = {
     "mercadolibre": mercadolibre.build,
@@ -820,7 +828,18 @@ def cmd_scrape(cfg) -> None:
                     seen_ids.add(item["id"])
 
             stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
-            gone = db.mark_inactive(conn, seen_ids, name)
+
+            # Si una zona se cortó a mitad de camino (bloqueo anti-bot, 403,
+            # etc.) sus avisos reales no van a estar en seen_ids — no hay que
+            # darlos de baja como si el aviso hubiera desaparecido de verdad.
+            incomplete = getattr(source, "incomplete_zones", set())
+            complete_zones = [z for z in search_cfg["zones"] if z not in incomplete]
+            gone = db.mark_inactive(conn, seen_ids, name, zones=complete_zones)
+            if incomplete:
+                log.info(
+                    "[%s] zona(s) incompleta(s), no se dan de baja avisos ahí: %s",
+                    name, ", ".join(sorted(incomplete)),
+                )
             log.info(
                 "[%s] %d nuevos, %d actualizados, %d cambios de precio, "
                 "%d dados de baja, %d descartados por filtros",
@@ -1167,14 +1186,28 @@ def upsert_listings(
     return stats
 
 
-def mark_inactive(conn: sqlite3.Connection, seen_ids: set[str], source: str) -> int:
+def mark_inactive(
+    conn: sqlite3.Connection,
+    seen_ids: set[str],
+    source: str,
+    zones: list[str] | None = None,
+) -> int:
     """Los avisos de esta fuente que no aparecieron en la corrida se bajan.
 
-    Un aviso que desaparece es señal: se vendió, o lo retiraron.
+    Un aviso que desaparece es señal: se vendió, o lo retiraron. Pero si
+    `zones` viene dado, solo se consideran avisos de esas zonas: una zona que
+    la fuente no pudo terminar de leer (bloqueo anti-bot, 403, etc.) no debe
+    hacer que sus avisos reales se den de baja por no haber aparecido.
     """
-    rows = conn.execute(
-        "SELECT id FROM listings WHERE source = ? AND active = 1", (source,)
-    ).fetchall()
+    query = "SELECT id FROM listings WHERE source = ? AND active = 1"
+    params: list = [source]
+    if zones is not None:
+        if not zones:
+            return 0
+        query += f" AND zone IN ({','.join('?' * len(zones))})"
+        params.extend(zones)
+
+    rows = conn.execute(query, params).fetchall()
     gone = [r["id"] for r in rows if r["id"] not in seen_ids]
     conn.executemany("UPDATE listings SET active = 0 WHERE id = ?", [(g,) for g in gone])
     return len(gone)
@@ -1385,6 +1418,7 @@ class ArgenpropSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+        self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
         url = f"{BASE}/{self.property_slug}/{self.operation_slug}/{slug(zone)}"
@@ -1402,6 +1436,7 @@ class ArgenpropSource:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                     page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
                 except Exception as exc:
+                    self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
                             "[argenprop] Cloudflare pidió verificación en %s (pág %d) — "
@@ -1575,6 +1610,7 @@ class MercadoLibreSource:
         self.page_size = int(conf.get("page_size", 50))
         self.max_results = int(conf.get("max_results_per_zone", 1000))
         self.delay = float(conf.get("rate_limit_seconds", 0.4))
+        self.incomplete_zones: set[str] = set()
 
         headers = {"User-Agent": "inmobot/0.1"}
         token = self._get_token(conf)
@@ -1630,9 +1666,11 @@ class MercadoLibreSource:
                         )
                 else:
                     log.error("Error HTTP %s en zona %s", exc.response.status_code, zone)
+                self.incomplete_zones.add(zone)
                 return
             except httpx.HTTPError as exc:
                 log.error("Fallo de red en zona %s: %s", zone, exc)
+                self.incomplete_zones.add(zone)
                 return
 
             payload = response.json()
@@ -1747,6 +1785,10 @@ class ZonapropSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+        # Zonas donde el fetch se cortó antes de terminar (bloqueo anti-bot,
+        # error de red) — el caller no debe dar de baja avisos ahí solo
+        # porque no aparecieron en esta corrida incompleta.
+        self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
         base = f"{self.property_slug}-{self.operation_slug}-{slug(zone)}"
@@ -1764,6 +1806,7 @@ class ZonapropSource:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                     page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
                 except Exception as exc:
+                    self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
                             "[zonaprop] Cloudflare pidió verificación en %s (pág %d) — "

@@ -6,11 +6,21 @@ te muestra el mercado. Todos los umbrales salen del config.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+
+# Preventa/pozo: precio de m² estructuralmente más bajo que la reventa
+# (se paga en cuotas, se entrega a futuro). Mezclarlo en la misma mediana de
+# zona/ambientes infla artificialmente el "descuento" de find_undervalued —
+# calibrado contra títulos reales, ver CLAUDE.md tarea 2.
+_OFF_PLAN_PATTERN = re.compile(
+    r"emprendimiento|xintel|en construcci|a estrenar|pozo|proyecto\b",
+    re.IGNORECASE,
+)
 
 
 def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
@@ -20,6 +30,7 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df["area"] = df["covered_area"].fillna(df["total_area"])
     df = df[(df["area"] > 0) & (df["price_norm"] > 0)]
     df["price_per_m2"] = df["price_norm"] / df["area"]
+    df["off_plan"] = df["title"].fillna("").str.contains(_OFF_PLAN_PATTERN)
     return df
 
 
@@ -32,12 +43,17 @@ def _trim_outliers(series: pd.Series, trim_pct: float) -> pd.Series:
 
 
 def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Mediana y percentiles de precio/m² por zona y cantidad de ambientes."""
+    """Mediana y percentiles de precio/m² por zona y cantidad de ambientes.
+
+    Excluye off_plan (pozo/emprendimientos): su precio/m² no es comparable
+    con el de reventa y distorsiona la mediana.
+    """
     trim = cfg.get("outlier_trim_pct", 5)
     min_n = cfg.get("min_comparables", 20)
+    resale = df[~df["off_plan"]] if "off_plan" in df.columns else df
 
     rows = []
-    for (zone, rooms), group in df.groupby(["zone", "rooms"], dropna=False):
+    for (zone, rooms), group in resale.groupby(["zone", "rooms"], dropna=False):
         clean = _trim_outliers(group["price_per_m2"], trim)
         if len(clean) < min_n:
             continue
@@ -64,7 +80,8 @@ def find_undervalued(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         return pd.DataFrame()
 
     threshold = cfg.get("undervalued_threshold_pct", 15)
-    merged = df.merge(stats[["zone", "rooms", "median", "n"]], on=["zone", "rooms"])
+    candidates = df[~df["off_plan"]] if "off_plan" in df.columns else df
+    merged = candidates.merge(stats[["zone", "rooms", "median", "n"]], on=["zone", "rooms"])
     merged["expected_price"] = merged["median"] * merged["area"]
     merged["discount_pct"] = (
         (merged["expected_price"] - merged["price_norm"]) / merged["expected_price"] * 100
