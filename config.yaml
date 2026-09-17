@@ -7,19 +7,14 @@ search:
   # Zonas a rastrear. Se usan como texto de búsqueda y para agrupar comparables.
   # Podés poner barrios, partidos o ciudades.
   zones:
-    - "Villa Crespo"
-    - "Almagro"
-    - "Caballito"
     - "Palermo"
     - "Belgrano"
     - "Recoleta"
-    - "Nuñez"
-
   # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
   # usando fx_rates (abajo) o se descartan si no hay cotización.
   currency: USD
 
-  price_min: 80000
+  price_min: 50000
   price_max: 140000
 
   # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
@@ -27,8 +22,8 @@ search:
     covered_area_min: 40        # m² cubiertos
     covered_area_max: null
     total_area_min: null
-    rooms_min: 2                # ambientes
-    rooms_max: 3
+    rooms_min: null            # ambientes
+    rooms_max: null 
     bedrooms_min: null
     max_maintenance_fee: null   # expensas, en moneda local
     max_age_years: null         # antigüedad
@@ -37,7 +32,7 @@ search:
   # Cotizaciones para normalizar a `currency`. Actualizalas a mano o
   # enchufá una API después (ver README).
   fx_rates:
-    ARS_per_USD: 1400
+    ARS_per_USD: 1500
 
 sources:
   mercadolibre:
