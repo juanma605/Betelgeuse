@@ -39,12 +39,15 @@ sources:
   mercadolibre:
     enabled: true
     site: MLA                   # MLA=Argentina, MLU=Uruguay, MLC=Chile...
-    category: MLA1459           # Inmuebles
-    # Filtros nativos de la API. Son IDs de ML: si querés alquiler en vez de
-    # venta, o PH/casa en vez de departamento, cambialos acá.
-    api_filters:
-      OPERATION: "242075"       # 242075=Venta | 242073=Alquiler
-      PROPERTY_TYPE: "242060"   # 242060=Departamento | 242062=Casa | 242061=PH
+    # ML dejó de modelar tipo de propiedad + operación como filtros de
+    # atributo (OPERATION/PROPERTY_TYPE ya no existen) y ahora los maneja
+    # como categoría anidada. Para cambiar de búsqueda, poné acá la
+    # categoría hoja que corresponda (verificado 2026-09 contra
+    # /categories/<id>, endpoint público que no requiere token):
+    #   Departamentos MLA1472 -> Alquiler MLA1473 | Alq.temp MLA50279 | Venta MLA1474
+    #   Casas         MLA1466 -> Alquiler MLA1467 | Alq.temp MLA50278 | Venta MLA1468
+    #   PH            MLA105179 -> Alquiler MLA105181 | Alq.temp MLA105180 | Venta MLA105182
+    category: MLA1474           # Departamentos en venta
     max_results_per_zone: 1000  # tope duro de la API (offset máx 1000)
     page_size: 50
     rate_limit_seconds: 0.4

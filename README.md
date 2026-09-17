@@ -41,9 +41,10 @@ Todo lo que cambia entre búsquedas está en `config.yaml`, no en el código:
 | `analysis` | umbral de subvaluado, mínimo de comparables, días de antigüedad, recorte de outliers |
 | `alerts.telegram` | notificaciones por score de oportunidad |
 
-Para cambiar de venta a alquiler, o de departamento a PH, tocás los IDs en
-`sources.mercadolibre.api_filters`. Para venderle esto a un cliente, le cambiás
-el YAML y nada más.
+Para cambiar de venta a alquiler, o de departamento a PH, tocás
+`sources.mercadolibre.category` (ver el mapeo de IDs en el comentario de
+`config.yaml`). Para venderle esto a un cliente, le cambiás el YAML y nada
+más.
 
 ## Estado actual
 
@@ -61,14 +62,21 @@ exponga `fetch(zone, search_cfg)` devolviendo dicts con las claves del esquema
 
 No pude probar contra la API en vivo, así que revisá esto:
 
-1. **Token de MercadoLibre.** La búsqueda pública históricamente no requería
-   auth, pero ML fue restringiendo el acceso. Si ves errores 401/403, generá un
-   token de app y ponelo en `sources.mercadolibre.access_token` (o exportá
-   `ML_ACCESS_TOKEN` y usá `"env:ML_ACCESS_TOKEN"`).
-2. **IDs de filtros.** Los valores de `OPERATION` y `PROPERTY_TYPE` son los
-   históricos de MLA. Si no filtran bien, pegale a
-   `/sites/MLA/search?category=MLA1459` y mirá `available_filters` en la
-   respuesta para sacar los IDs vigentes.
+1. **Token de MercadoLibre (confirmado, bloqueante).** La API pública ya no
+   funciona sin auth: `/sites/MLA/search`, `/items/{id}` y prácticamente todo
+   menos `/categories/*` devuelven 403 sin token, incluso sin ningún filtro.
+   Hace falta generar un `access_token` vía OAuth (flujo `authorization_code`,
+   no hay `client_credentials`: hay que crear una app en
+   developers.mercadolibre.com.ar y loguearse una vez con una cuenta de ML) y
+   ponerlo en `sources.mercadolibre.access_token` (o exportar `ML_ACCESS_TOKEN`
+   y usar `"env:ML_ACCESS_TOKEN"`). El token expira a las 6 horas y el
+   `refresh_token` es de un solo uso — para un cron hace falta guardar y rotar
+   el refresh_token, no alcanza con pegar un token fijo.
+2. **IDs de filtros (ya corregido).** `OPERATION`/`PROPERTY_TYPE` no existen
+   más como filtros de atributo: ML pasó a modelar tipo de propiedad +
+   operación como categoría anidada (ej. Departamentos `MLA1472` → Venta
+   `MLA1474`). El config y `mercadolibre.py` ya usan `category` con la
+   categoría hoja — ver el mapeo en el comentario de `config.yaml`.
 3. **Nombres de atributos.** `ATTRIBUTE_MAP` en `mercadolibre.py` asume
    `COVERED_AREA`, `ROOMS`, `MAINTENANCE_FEE`, etc. Si vienen vacíos, imprimí
    `raw["attributes"]` de un aviso y ajustá el mapa.
