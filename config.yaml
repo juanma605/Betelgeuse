@@ -1,0 +1,96 @@
+# =============================================================================
+# inmobot — configuración
+# Todo lo que cambia entre búsquedas (o entre clientes) vive acá.
+# =============================================================================
+
+search:
+  # Zonas a rastrear. Se usan como texto de búsqueda y para agrupar comparables.
+  # Podés poner barrios, partidos o ciudades.
+  zones:
+    - "Villa Crespo"
+    - "Almagro"
+    - "Caballito"
+
+  # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
+  # usando fx_rates (abajo) o se descartan si no hay cotización.
+  currency: USD
+
+  price_min: 80000
+  price_max: 140000
+
+  # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
+  filters:
+    covered_area_min: 40        # m² cubiertos
+    covered_area_max: null
+    total_area_min: null
+    rooms_min: 2                # ambientes
+    rooms_max: 3
+    bedrooms_min: null
+    max_maintenance_fee: null   # expensas, en moneda local
+    max_age_years: null         # antigüedad
+    require_photos: true
+
+  # Cotizaciones para normalizar a `currency`. Actualizalas a mano o
+  # enchufá una API después (ver README).
+  fx_rates:
+    ARS_per_USD: 1400
+
+sources:
+  mercadolibre:
+    enabled: true
+    site: MLA                   # MLA=Argentina, MLU=Uruguay, MLC=Chile...
+    category: MLA1459           # Inmuebles
+    # Filtros nativos de la API. Son IDs de ML: si querés alquiler en vez de
+    # venta, o PH/casa en vez de departamento, cambialos acá.
+    api_filters:
+      OPERATION: "242075"       # 242075=Venta | 242073=Alquiler
+      PROPERTY_TYPE: "242060"   # 242060=Departamento | 242062=Casa | 242061=PH
+    max_results_per_zone: 1000  # tope duro de la API (offset máx 1000)
+    page_size: 50
+    rate_limit_seconds: 0.4
+    # Opcional: token de acceso si tu cuenta lo requiere. Podés usar
+    # "env:ML_ACCESS_TOKEN" para leerlo de una variable de entorno.
+    access_token: null
+
+  zonaprop:
+    enabled: false              # requiere Playwright — ver README
+    rate_limit_seconds: 4.0
+
+  argenprop:
+    enabled: false
+    rate_limit_seconds: 4.0
+
+storage:
+  path: "data/listings.db"
+  # Cada corrida guarda un snapshot de precio por aviso. Esto es lo que
+  # construye el historial que ningún portal te muestra.
+  keep_snapshots: true
+
+dedup:
+  enabled: true
+  # Dos avisos se consideran el mismo inmueble si coinciden en zona,
+  # ambientes, y caen dentro de estas tolerancias.
+  area_tolerance_m2: 2
+  price_tolerance_pct: 5
+
+analysis:
+  # Un aviso es "subvaluado" si su precio está este % por debajo del
+  # esperado para su zona/tipología.
+  undervalued_threshold_pct: 15
+  # No calcules estadísticas de una zona con menos comparables que esto.
+  min_comparables: 20
+  # Avisos publicados hace más de N días = vendedor potencialmente apurado.
+  stale_days: 60
+  # Recorte de outliers antes de calcular medianas (percentiles).
+  outlier_trim_pct: 5
+
+alerts:
+  telegram:
+    enabled: false
+    bot_token: "env:TELEGRAM_BOT_TOKEN"
+    chat_id: "env:TELEGRAM_CHAT_ID"
+    # Avisar solo si el aviso supera este score de oportunidad (0-100).
+    min_score: 70
+
+logging:
+  level: INFO
