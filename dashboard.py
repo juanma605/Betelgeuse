@@ -61,12 +61,24 @@ if not incl_off_plan:
 filtered = filtered[filtered["price_norm"].between(*price_range)]
 
 # --- promedio del propio grupo (zona + ambientes), sin piso de muestra -- #
-group_avg = filtered.groupby(["zone", "rooms"])["price_per_m2"].transform("mean")
-group_n = filtered.groupby(["zone", "rooms"])["price_per_m2"].transform("size")
+# El promedio de referencia sale solo de avisos con m² cubiertos, igual que
+# las medianas de analyze.py: los de m² totales se comparan contra él pero no
+# lo definen, porque lo tirarían para abajo.
+covered_m2 = filtered["price_per_m2"].where(filtered["area_source"] == "covered")
+by_group = covered_m2.groupby([filtered["zone"], filtered["rooms"]])
+group_avg = by_group.transform("mean")
 filtered = filtered.assign(
     avg_zona_m2=group_avg,
     vs_promedio_pct=((filtered["price_per_m2"] / group_avg) - 1) * 100,
-    n_comparables=group_n,
+    n_comparables=by_group.transform("count"),
+    area_estimada=filtered["area_source"] == "total",
+)
+
+AREA_NOTE = (
+    "m² totales, no cubiertos: el aviso no publica la superficie cubierta "
+    "(Zonaprop y Mudafy no la muestran en el listado). Su precio/m² sale más bajo "
+    "de lo real, así que si aparece como barato puede ser un PH con patio o un "
+    "balcón grande, no una oportunidad."
 )
 
 # --- KPIs --------------------------------------------------------------- #
@@ -87,8 +99,11 @@ st.bar_chart(filtered.groupby("zone")["price_per_m2"].mean())
 # --- destacados: se alejan del promedio de su propio grupo -------------- #
 st.subheader("Destacados (vs. el promedio de su zona/ambientes)")
 comparable = filtered[filtered["n_comparables"] >= 2]
-cols = ["title", "zone", "rooms", "area", "price_norm", "price_per_m2", "vs_promedio_pct", "url"]
-linked_cols = [c for c in cols if c != "url"]
+cols = [
+    "title", "zone", "rooms", "area", "area_estimada", "price_norm",
+    "price_per_m2", "vs_promedio_pct", "url",
+]
+linked_cols = [c for c in cols if c not in ("url", "area_estimada")]
 
 
 _TABLE_CSS = """
@@ -115,7 +130,11 @@ def _table_with_link(frame: "pd.DataFrame") -> None:
         f'<a href="{u}" target="_blank" title="{t}">{s}…</a>' if u else s
         for t, s, u in zip(display["title"], short_title, display["url"])
     ]
-    table_html = display[linked_cols].round(1).to_html(escape=False, index=False)
+    display = display.round(1)
+    display["area"] = [
+        f"{a:g}*" if est else f"{a:g}" for a, est in zip(display["area"], display["area_estimada"])
+    ]
+    table_html = display[linked_cols].to_html(escape=False, index=False)
     st.markdown(_TABLE_CSS + f'<div class="inmobot-table">{table_html}</div>', unsafe_allow_html=True)
 
 
@@ -128,6 +147,8 @@ with col_b:
     st.caption("Más caros que el promedio de su grupo")
     expensive = comparable.sort_values("vs_promedio_pct", ascending=False).head(10)
     _table_with_link(expensive)
+if cheap["area_estimada"].any() or expensive["area_estimada"].any():
+    st.caption("\\* " + AREA_NOTE)
 
 # --- bajaron de precio: el dato que ningún portal muestra ---------------- #
 st.subheader("Bajaron de precio")
@@ -144,6 +165,11 @@ else:
 # --- tabla completa ------------------------------------------------------#
 st.subheader(f"Todos los avisos ({len(filtered)})")
 st.dataframe(filtered[cols].round(1), hide_index=True, use_container_width=True)
+if filtered["area_estimada"].any():
+    st.caption(
+        f"{int(filtered['area_estimada'].sum())} de {len(filtered)} con `area_estimada`: "
+        + AREA_NOTE
+    )
 
 with st.expander("Ver todas las columnas (dato crudo)"):
     st.dataframe(filtered, hide_index=True, use_container_width=True)

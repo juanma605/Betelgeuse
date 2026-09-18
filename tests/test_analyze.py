@@ -100,6 +100,32 @@ def test_is_off_plan_reconoce_el_pozo_por_la_url():
     ) is True
 
 
+def test_un_aviso_con_solo_m2_totales_no_mueve_la_mediana_y_sale_marcado(tmp_path):
+    # El caso real que motivó esto: un "2 amb de 138 m²" que no publica m²
+    # cubiertos aparecía primero entre los subvaluados con 61% de descuento.
+    # Casi seguro un PH con patio: el área total infla el denominador.
+    avisos = [
+        {"id": f"remax:{i}", "source": "remax", "source_id": str(i), "title": "Depto",
+         "zone": "Almagro", "rooms": 2, "covered_area": 50, "price_norm": 100_000}
+        for i in range(10)
+    ] + [
+        {"id": "zonaprop:ph", "source": "zonaprop", "source_id": "ph", "title": "PH",
+         "zone": "Almagro", "rooms": 2, "covered_area": None, "total_area": 138,
+         "price_norm": 119_000},
+    ]
+    with db.connect(tmp_path / "t.db") as conn:
+        db.upsert_listings(conn, avisos)
+        df = analyze.load_active(conn)
+
+    stats = analyze.zone_stats(df, CFG)
+    assert stats.iloc[0]["n"] == 10
+    assert stats.iloc[0]["median"] == pytest.approx(2000.0)
+
+    hits = analyze.find_undervalued(df, CFG).set_index("id")
+    assert list(hits.index) == ["zonaprop:ph"]
+    assert bool(hits.loc["zonaprop:ph", "area_estimada"]) is True
+
+
 def test_comparables_note_explica_por_que_no_hay_estadisticas():
     note = analyze.comparables_note(frame(mercado(n=3)), CFG)
 

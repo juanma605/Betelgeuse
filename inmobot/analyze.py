@@ -50,6 +50,12 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query("SELECT * FROM listings WHERE active = 1", conn)
     if df.empty:
         return df
+    # Zonaprop y Mudafy no publican m² cubiertos en la tarjeta del listado,
+    # solo totales. Usamos el total para no perder esos avisos, pero queda
+    # registrado: un PH de 60 m² cubiertos con 80 de patio no vale por m²
+    # lo mismo que un depto de 140 m² cubiertos, y mezclarlos sin avisar
+    # fabrica "oportunidades".
+    df["area_source"] = df["covered_area"].notna().map({True: "covered", False: "total"})
     df["area"] = df["covered_area"].fillna(df["total_area"])
     df = df[(df["area"] > 0) & (df["price_norm"] > 0)]
     df["price_per_m2"] = df["price_norm"] / df["area"]
@@ -76,8 +82,14 @@ def comparable_pool(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     barato es justo la oportunidad de negociación que el proyecto busca,
     solo no debe ser él mismo quien define la mediana contra la que se lo
     compara.
+
+    Y solo entran avisos con m² cubiertos: la mediana es la vara contra la
+    que se mide todo lo demás, y una vara que mezcla superficie total con
+    cubierta sale más baja de lo que es.
     """
     pool = df[~df["off_plan"]] if "off_plan" in df.columns else df
+    if "area_source" in pool.columns:
+        pool = pool[pool["area_source"] == "covered"]
     if "first_seen" in pool.columns:
         first_seen = pd.to_datetime(pool["first_seen"], format="ISO8601", utc=True)
         days_listed = (datetime.now(timezone.utc) - first_seen).dt.days
@@ -122,8 +134,9 @@ def comparables_note(df: pd.DataFrame, cfg: dict) -> str:
     pool = comparable_pool(df, cfg)
     if pool.empty:
         return (
-            f"No quedan comparables: los {len(df)} avisos activos son de pozo o "
-            f"llevan más de {cfg.get('stale_days', 60)} días publicados."
+            f"No quedan comparables: los {len(df)} avisos activos son de pozo, "
+            f"llevan más de {cfg.get('stale_days', 60)} días publicados o no "
+            "publican m² cubiertos."
         )
 
     sizes = {
@@ -177,6 +190,13 @@ def find_undervalued(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     merged["expected_price"] = merged["median"] * merged["area"]
     merged["discount_pct"] = (
         (merged["expected_price"] - merged["price_norm"]) / merged["expected_price"] * 100
+    )
+    # Los avisos con solo m² totales se evalúan igual (pueden ser gangas de
+    # verdad) pero su descuento está inflado por construcción: se los mide
+    # con una vara de m² cubiertos usando un área que incluye patio o balcón.
+    # No inventamos un factor de conversión total->cubierta; los marcamos.
+    merged["area_estimada"] = (
+        merged["area_source"] == "total" if "area_source" in merged.columns else False
     )
 
     hits = merged[merged["discount_pct"] >= threshold]

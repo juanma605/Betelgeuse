@@ -121,8 +121,19 @@ def cmd_analyze(cfg, export_dir: Path | None = None, use_demo: bool = False) -> 
 
     print(f"=== Subvaluados (>= {acfg['undervalued_threshold_pct']}% bajo la mediana) ===")
     if not under.empty:
+        top = under.head(15).round(1)
+        top = top.assign(area=[
+            f"{a:g}*" if est else f"{a:g}" for a, est in zip(top["area"], top["area_estimada"])
+        ])
         cols = ["title", "zone", "area", "price_norm", "discount_pct", "url"]
-        print(under[cols].head(15).round(1).to_string(index=False), "\n")
+        print(top[cols].to_string(index=False))
+        if top["area_estimada"].any():
+            print(
+                "* m² totales, no cubiertos: el aviso no publica la superficie "
+                "cubierta, así que su descuento sale inflado (puede ser un PH con "
+                "patio o un depto con balcón grande). Revisalo antes de creerlo."
+            )
+        print()
     elif stats.empty:
         print("Sin medianas de referencia no hay contra qué comparar.\n")
     else:
