@@ -17,8 +17,17 @@ import pandas as pd
 # (se paga en cuotas, se entrega a futuro). Mezclarlo en la misma mediana de
 # zona/ambientes infla artificialmente el "descuento" de find_undervalued —
 # calibrado contra títulos reales, ver CLAUDE.md tarea 2.
+#
+# "desarrollo" y "proyecta" atrapan avisos de pozo que no dicen "pozo" ni
+# "emprendimiento" explícitamente (ej. "nuevo desarrollo boutique", "se
+# proyectan para ser habitados"). "reciclaje completo" es la frase completa
+# a propósito, no solo "reciclaje": un depto individual reciclado/refaccionado
+# es reventa normal, "reciclaje completo" en cambio describe un edificio
+# entero vendido como proyecto — perderíamos comparables válidos si
+# excluyéramos cualquier reventa que mencione una reforma pasada.
 _OFF_PLAN_PATTERN = re.compile(
-    r"emprendimiento|xintel|en construcci|a estrenar|pozo|proyecto\b",
+    r"emprendimiento|xintel|en construcci|a estrenar|pozo|proyecto\b"
+    r"|desarrollo|proyecta|reciclaje completo",
     re.IGNORECASE,
 )
 
@@ -46,11 +55,23 @@ def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Mediana y percentiles de precio/m² por zona y cantidad de ambientes.
 
     Excluye off_plan (pozo/emprendimientos): su precio/m² no es comparable
-    con el de reventa y distorsiona la mediana.
+    con el de reventa y distorsiona la mediana. También excluye avisos
+    publicados hace más de `stale_days`: si algo no se vende en tanto
+    tiempo probablemente algo lo saca del precio normal (para bien o para
+    mal) y no debería fijar qué es "precio de mercado". Ojo: esto NO los
+    saca de `find_undervalued` — un aviso viejo *y* barato es justo la
+    oportunidad de negociación que el proyecto busca, solo no debe ser él
+    mismo quien define la mediana contra la que se lo compara.
     """
     trim = cfg.get("outlier_trim_pct", 5)
     min_n = cfg.get("min_comparables", 20)
+    stale_days = cfg.get("stale_days", 60)
+
     resale = df[~df["off_plan"]] if "off_plan" in df.columns else df
+    if "first_seen" in resale.columns:
+        first_seen = pd.to_datetime(resale["first_seen"], format="ISO8601", utc=True)
+        days_listed = (datetime.now(timezone.utc) - first_seen).dt.days
+        resale = resale[days_listed <= stale_days]
 
     rows = []
     for (zone, rooms), group in resale.groupby(["zone", "rooms"], dropna=False):

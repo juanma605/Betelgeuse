@@ -68,6 +68,10 @@ sources:
   zonaprop:
     enabled: true
     # Arman la URL como <property_slug>-<operation_slug>-<zona>.html
+    # Podés poner un solo tipo o una lista (ej. [departamentos, casas, ph])
+    # — la fuente recorre cada uno, multiplicando lo que trae por zona sin
+    # pedirle más páginas al sitio (pero sí más requests seguidos en la
+    # misma sesión, que es justo donde vimos gatillarse Cloudflare).
     property_slug: departamentos   # departamentos | casas | ph
     operation_slug: venta          # venta | alquiler | alquiler-temporario
     rate_limit_seconds: 4.0
@@ -79,7 +83,7 @@ sources:
   argenprop:
     enabled: true
     # Arman la URL como /<property_slug>/<operation_slug>/<zona>
-    property_slug: departamentos   # departamentos | casas | ph
+    property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
     rate_limit_seconds: 4.0
     # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
@@ -88,13 +92,25 @@ sources:
   mudafy:
     enabled: true
     # Arma la URL como /<operation_slug>/<property_slug>/<zone_prefix><zona>
-    property_slug: departamentos   # departamentos | casas | ph
+    property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
     zone_prefix: "caba-"           # prefijo de Capital Federal en las URLs de Mudafy
     rate_limit_seconds: 4.0
     # Mudafy no tiene paginación crawleable (mapa + lista de una sola carga,
     # sin botón "más" ni links de página) y su robots.txt prohíbe cualquier
     # URL con query string. Tope real: ~25 avisos por zona por corrida.
+
+  remax:
+    enabled: true
+    # Arma la URL como <property_slug>-en-<operation_slug>-en-<zona>
+    property_slug: departamentos   # departamentos | casas | ph (o una lista)
+    operation_slug: venta          # venta | alquiler
+    rate_limit_seconds: 4.0
+    # A diferencia de las otras 3 fuentes, el robots.txt de Remax es muy
+    # permisivo (solo banea a AhrefsBot y `?associate`) y sí soporta
+    # paginación real vía `?page=N` — no hay tope duro del sitio, esto es
+    # solo un límite propio para no pasarnos en una sola corrida.
+    max_pages: 3
 
 storage:
   path: "data/listings.db"
@@ -115,8 +131,9 @@ analysis:
   undervalued_threshold_pct: 15
   # No calcules estadísticas de una zona con menos comparables que esto.
   min_comparables: 20
-  # Avisos publicados hace más de N días = vendedor potencialmente apurado.
-  stale_days: 60
+  # Avisos publicados hace más de N días = vendedor potencialmente apurado
+  # (y se excluyen de la mediana de zona/ambientes, ver zone_stats).
+  stale_days: 100
   # Recorte de outliers antes de calcular medianas (percentiles).
   outlier_trim_pct: 5
 

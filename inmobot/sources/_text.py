@@ -5,14 +5,24 @@ from __future__ import annotations
 import re
 
 
+_THOUSANDS_ONLY = re.compile(r"^\d{1,3}(\.\d{3})+$")
+
+
 def parse_number(text: str | None) -> float | None:
-    """"1.234,5" (miles con punto, decimales con coma, estilo AR) -> 1234.5."""
+    """Estilo AR ("1.234,5" -> 1234.5) pero sin asumir que un punto solo
+    siempre es separador de miles: "174.37" (Remax, m² con decimales) no
+    lleva coma y el punto ahí es decimal, no miles. Solo se interpreta como
+    miles cuando el patrón es inequívoco (grupos de exactamente 3 dígitos)."""
     if not text:
         return None
     match = re.search(r"[\d.,]+", text)
     if not match:
         return None
-    raw = match.group(0).replace(".", "").replace(",", ".")
+    raw = match.group(0)
+    if "," in raw:
+        raw = raw.replace(".", "").replace(",", ".")
+    elif _THOUSANDS_ONLY.match(raw):
+        raw = raw.replace(".", "")
     try:
         return float(raw)
     except ValueError:

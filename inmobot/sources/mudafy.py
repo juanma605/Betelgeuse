@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Iterator
 
 from ..normalize import slug
@@ -41,50 +42,58 @@ class MudafySource:
     name = "mudafy"
 
     def __init__(self, conf: dict):
-        self.property_slug = conf.get("property_slug", "departamentos")
+        raw_slug = conf.get("property_slug", "departamentos")
+        self.property_slugs = raw_slug if isinstance(raw_slug, list) else [raw_slug]
         self.operation_slug = conf.get("operation_slug", "venta")
         self.zone_prefix = conf.get("zone_prefix", "caba-")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.incomplete_zones: set[str] = set()
 
-    def _url(self, zone: str) -> str:
+    def _url(self, property_slug: str, zone: str) -> str:
         return (
-            f"{BASE}/{self.operation_slug}/{self.property_slug}/"
+            f"{BASE}/{self.operation_slug}/{property_slug}/"
             f"{self.zone_prefix}{slug(zone)}"
         )
 
-    @property
-    def _card_selector(self) -> str:
+    @staticmethod
+    def _card_selector_for(property_slug: str) -> str:
         # Cada card real tiene un <a> de contenido (con h3, el título) más
         # varios <a> vacíos superpuestos en las fotos del carrusel que
         # apuntan al mismo href — filtramos por ":has(h3)" para quedarnos
         # con uno solo por aviso.
-        return f'a[href^="/{self.property_slug}/"]:has(h3)'
+        return f'a[href^="/{property_slug}/"]:has(h3)'
 
     # ---------------------------------------------------------------- #
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
-        url = self._url(zone)
         with browser_page() as page_obj:
-            try:
-                page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page_obj.wait_for_selector(self._card_selector, timeout=10000)
-            except Exception as exc:
-                self.incomplete_zones.add(zone)
-                if is_bot_challenge(page_obj):
-                    log.warning(
-                        "[mudafy] verificación anti-bot en %s — corto acá, no la esquivamos.",
-                        zone,
-                    )
-                else:
-                    log.info("[mudafy] corto en %s: %s", zone, exc)
-                return
+            for i, property_slug in enumerate(self.property_slugs):
+                if i > 0:
+                    time.sleep(self.delay)
+                yield from self._fetch_property_type(page_obj, property_slug, zone)
 
-            cards = page_obj.query_selector_all(self._card_selector)
-            for card in cards:
-                item = self._map(card, zone)
-                if item:
-                    yield item
+    def _fetch_property_type(self, page_obj, property_slug: str, zone: str) -> Iterator[dict]:
+        url = self._url(property_slug, zone)
+        card_selector = self._card_selector_for(property_slug)
+        try:
+            page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page_obj.wait_for_selector(card_selector, timeout=10000)
+        except Exception as exc:
+            self.incomplete_zones.add(zone)
+            if is_bot_challenge(page_obj):
+                log.warning(
+                    "[mudafy] verificación anti-bot en %s/%s — corto acá, no la esquivamos.",
+                    property_slug, zone,
+                )
+            else:
+                log.info("[mudafy] corto en %s/%s: %s", property_slug, zone, exc)
+            return
+
+        cards = page_obj.query_selector_all(card_selector)
+        for card in cards:
+            item = self._map(card, zone)
+            if item:
+                yield item
 
     # ---------------------------------------------------------------- #
 

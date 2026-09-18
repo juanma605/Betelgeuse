@@ -16,7 +16,7 @@ import pandas as pd
 
 from . import alerts, analyze, db, normalize
 from .config import load as load_config
-from .sources import argenprop, mercadolibre, mudafy, zonaprop
+from .sources import argenprop, mercadolibre, mudafy, remax, zonaprop
 
 log = logging.getLogger("inmobot")
 
@@ -32,6 +32,7 @@ SOURCE_BUILDERS = {
     "zonaprop": zonaprop.build,
     "argenprop": argenprop.build,
     "mudafy": mudafy.build,
+    "remax": remax.build,
 }
 
 
