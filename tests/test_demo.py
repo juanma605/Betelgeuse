@@ -64,6 +64,23 @@ def test_export_anonimiza_y_conserva_el_historial(tmp_path):
     assert huerfanos == 0
 
 
+def test_export_redondea_coordenadas_sin_perderlas(tmp_path):
+    # ~100 m: alcanza para que el mapa del demo tenga puntos, no para
+    # identificar la unidad. Y redondear no puede convertirse en borrar:
+    # si el origen tenía ubicación, el demo tiene que tenerla.
+    base_de_prueba(tmp_path / "real.db")
+    demo.export(tmp_path / "real.db", tmp_path / "demo.db")
+
+    conn = sqlite3.connect(tmp_path / "demo.db")
+    filas = conn.execute("SELECT latitude, longitude FROM listings ORDER BY id").fetchall()
+
+    sin_origen, con_origen = filas  # remax:222 no tenía coordenadas; zonaprop:111 sí
+    assert sin_origen == (None, None)
+    assert None not in con_origen
+    assert all(round(c, 3) == c for c in con_origen)
+    assert con_origen == (-34.607, -58.42)
+
+
 def test_export_es_reproducible(tmp_path):
     # Si no fuera determinístico, regenerar el demo ensuciaría el diff del
     # repo con un binario distinto cada vez.
