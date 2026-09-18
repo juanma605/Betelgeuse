@@ -125,7 +125,11 @@ class RemaxSource:
             for pattern, field in _FEATURE_PATTERNS:
                 match = pattern.search(text)
                 if match:
-                    item[field] = parse_number(match.group(1))
+                    # Remax escribe los m² a la inglesa ("39.04", "33.420"):
+                    # acá el punto es decimal, nunca separador de miles. El
+                    # precio y las expensas sí van a la argentina, por eso
+                    # esto es solo para las características.
+                    item[field] = parse_number(match.group(1), decimal_point=True)
                     break
 
         return item

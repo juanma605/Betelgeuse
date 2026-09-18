@@ -8,11 +8,19 @@ import re
 _THOUSANDS_ONLY = re.compile(r"^\d{1,3}(\.\d{3})+$")
 
 
-def parse_number(text: str | None) -> float | None:
+def parse_number(text: str | None, decimal_point: bool = False) -> float | None:
     """Estilo AR ("1.234,5" -> 1234.5) pero sin asumir que un punto solo
     siempre es separador de miles: "174.37" (Remax, m² con decimales) no
-    lleva coma y el punto ahí es decimal, no miles. Solo se interpreta como
-    miles cuando el patrón es inequívoco (grupos de exactamente 3 dígitos)."""
+    lleva coma y el punto ahí es decimal. Solo se interpreta como miles
+    cuando el patrón es inequívoco (grupos de exactamente 3 dígitos).
+
+    `decimal_point=True` apaga hasta esa interpretación, para campos donde
+    sabemos que el punto nunca separa miles. Hace falta porque "33.420" es
+    genuinamente ambiguo: son 33.420 m² o 33,42 m² según quién lo escribió, y
+    el string solo no alcanza para decidir. Leerlo mal no es un redondeo:
+    mete un departamento de 33.420 m² en la base y te arruina el promedio de
+    la zona entera.
+    """
     if not text:
         return None
     match = re.search(r"[\d.,]+", text)
@@ -21,7 +29,7 @@ def parse_number(text: str | None) -> float | None:
     raw = match.group(0)
     if "," in raw:
         raw = raw.replace(".", "").replace(",", ".")
-    elif _THOUSANDS_ONLY.match(raw):
+    elif not decimal_point and _THOUSANDS_ONLY.match(raw):
         raw = raw.replace(".", "")
     try:
         return float(raw)

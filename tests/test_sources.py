@@ -14,6 +14,7 @@ from fake_dom import FIXTURES, card_from
 
 from inmobot import db
 from inmobot.sources import argenprop, mercadolibre, mudafy, remax, zonaprop
+from inmobot.sources._text import parse_number
 
 # `address` no está en el esquema (db.upsert_listings lo descarta) pero dos
 # fuentes lo capturan. Se permite acá para no fingir que es parte del contrato.
@@ -34,6 +35,16 @@ def assert_esquema_comun(item: dict) -> None:
     for field in NUMERIC_FIELDS:
         value = item.get(field)
         assert value is None or isinstance(value, (int, float)), f"{field}={value!r}"
+
+
+def test_parse_number_distingue_miles_de_decimales():
+    assert parse_number("$ 200.000 Expensas") == 200_000       # miles, a la argentina
+    assert parse_number("1.234,5") == 1234.5
+    assert parse_number("174.37 m²") == 174.37                 # no es grupo de 3: decimal
+    # "33.420" es ambiguo de verdad, y ahí manda quién lo escribió: para
+    # Remax son 33,42 m². Sin esto entraba un depto de 33.420 m² a la base.
+    assert parse_number("33.420") == 33_420
+    assert parse_number("33.420", decimal_point=True) == 33.42
 
 
 def test_zonaprop_map():
