@@ -31,6 +31,20 @@ OFF_PLAN_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Zonaprop publica los emprendimientos bajo esta ruta. Es una señal
+# estructural del portal, no una palabra que alguien eligió poner: atrapa los
+# que el título deja pasar porque están escritos como marketing y no dicen
+# nada ("Folium Jufre: Emplazado en Jufre 975...").
+OFF_PLAN_URL_MARK = "/emprendimiento/"
+
+
+def is_off_plan(title: str | None, url: str | None) -> bool:
+    """Preventa/pozo: se paga en cuotas y se entrega a futuro, así que su
+    precio por m² no es comparable con el de una reventa."""
+    if url and OFF_PLAN_URL_MARK in url:
+        return True
+    return bool(OFF_PLAN_PATTERN.search(title or ""))
+
 
 def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query("SELECT * FROM listings WHERE active = 1", conn)
@@ -39,7 +53,7 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df["area"] = df["covered_area"].fillna(df["total_area"])
     df = df[(df["area"] > 0) & (df["price_norm"] > 0)]
     df["price_per_m2"] = df["price_norm"] / df["area"]
-    df["off_plan"] = df["title"].fillna("").str.contains(OFF_PLAN_PATTERN)
+    df["off_plan"] = [is_off_plan(t, u) for t, u in zip(df["title"], df["url"])]
     return df
 
 

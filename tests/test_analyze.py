@@ -90,6 +90,16 @@ def test_zone_stats_recorta_los_extremos():
     assert stats.iloc[0]["median"] == pytest.approx(2000.0)
 
 
+def test_is_off_plan_reconoce_el_pozo_por_la_url():
+    # Los emprendimientos de Zonaprop tienen títulos de marketing que no dicen
+    # ni "pozo" ni "emprendimiento", pero el portal los cuelga de /emprendimiento/.
+    assert analyze.is_off_plan("Folium Jufre: Emplazado en Jufre 975", None) is False
+    assert analyze.is_off_plan(
+        "Folium Jufre: Emplazado en Jufre 975",
+        "https://www.zonaprop.com.ar/propiedades/emprendimiento/folium-jufre-58654141.html",
+    ) is True
+
+
 def test_comparables_note_explica_por_que_no_hay_estadisticas():
     note = analyze.comparables_note(frame(mercado(n=3)), CFG)
 

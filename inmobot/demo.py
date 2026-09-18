@@ -22,7 +22,7 @@ import sqlite3
 from pathlib import Path
 
 from . import db
-from .analyze import OFF_PLAN_PATTERN
+from .analyze import is_off_plan
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,9 @@ def synthetic_title(row) -> str:
     place = row["neighborhood"] or row["zone"]
     if place:
         parts.append(str(place))
-    if OFF_PLAN_PATTERN.search(row["title"] or ""):
+    # La URL se borra en el demo, así que la marca de pozo tiene que quedar
+    # en el título: es el único lugar donde sobrevive la clasificación.
+    if is_off_plan(row["title"], row["url"]):
         parts.append("emprendimiento en pozo")
     return " · ".join(parts) or "aviso"
 
