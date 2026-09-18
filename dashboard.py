@@ -14,8 +14,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import streamlit as st
 import pandas as pd
+import pydeck as pdk
+import streamlit as st
 from inmobot import analyze, config, db, demo
 
 st.set_page_config(page_title="inmobot", layout="wide")
@@ -175,13 +176,72 @@ if filtered["area_estimada"].any():
 with st.expander("Ver todas las columnas (dato crudo)"):
     st.dataframe(filtered, hide_index=True, use_container_width=True)
 
-# --- mapa, si hay coordenadas --------------------------------------------#
-with_coords = filtered.dropna(subset=["latitude", "longitude"])
-if not with_coords.empty:
-    st.subheader("Mapa")
-    st.map(with_coords.rename(columns={"latitude": "lat", "longitude": "lon"}))
-else:
-    st.caption(
-        "Sin coordenadas para mostrar en mapa (Zonaprop/Argenprop todavía no "
-        "las capturan — pendiente)."
+# --- mapa: los mismos avisos que la tabla, los que tienen ubicación ------#
+st.subheader("Mapa")
+located = filtered.dropna(subset=["latitude", "longitude"])
+unlocated = len(filtered) - len(located)
+
+if located.empty:
+    st.info(
+        f"Ninguno de los {len(filtered)} avisos filtrados tiene ubicación. Hoy solo "
+        "Remax y Mudafy la publican en el listado; Zonaprop y Argenprop, no."
     )
+else:
+    def _m2(area, estimada):
+        return f"{area:.0f} m² totales* (no publica cubiertos)" if estimada else f"{area:.0f} m²"
+
+    points = pd.DataFrame({
+        "latitude": located["latitude"],
+        "longitude": located["longitude"],
+        "zone": located["zone"],
+        "rooms": [f"{r:.0f} amb" if pd.notna(r) else "amb. s/d" for r in located["rooms"]],
+        "m2": [_m2(a, e) for a, e in zip(located["area"], located["area_estimada"])],
+        "price": [f"USD {p:,.0f}" for p in located["price_norm"]],
+        "price_m2": [f"USD {p:,.0f}/m²" for p in located["price_per_m2"]],
+        "title": located["title"],
+        "url": located["url"],
+    })
+
+    # compute_view da un zoom que abarca todos los puntos, pero centra en el
+    # promedio: un cúmulo denso lo arrastra y deja afuera los de los bordes.
+    # Se centra en el medio del recuadro. Con un solo punto se iría a zoom 21.
+    view = pdk.data_utils.compute_view(points[["longitude", "latitude"]].values.tolist())
+    view.latitude = (points["latitude"].min() + points["latitude"].max()) / 2
+    view.longitude = (points["longitude"].min() + points["longitude"].max()) / 2
+    view.zoom = min(view.zoom, 15)
+
+    deck = pdk.Deck(
+        layers=[pdk.Layer(
+            "ScatterplotLayer",
+            id="avisos",
+            data=points,
+            get_position=["longitude", "latitude"],
+            get_radius=35,
+            radius_min_pixels=4,
+            get_fill_color=[220, 70, 50, 190],
+            pickable=True,
+            auto_highlight=True,
+        )],
+        initial_view_state=view,
+        tooltip={"html": "<b>{zone}</b> · {rooms}<br/>{m2}<br/>{price} · {price_m2}"
+                         "<br/><i>clic para ver el link</i>"},
+    )
+    event = st.pydeck_chart(deck, on_select="rerun", selection_mode="single-object", key="mapa")
+
+    # El tooltip desaparece cuando el mouse se va, así que el link no puede
+    # vivir ahí: el clic selecciona el punto y el aviso aparece abajo.
+    picked = ((event.selection or {}).get("objects") or {}).get("avisos") or []
+    if picked:
+        p = picked[0]
+        st.markdown(f"**{p['zone']} · {p['rooms']} · {p['m2']} · {p['price']}** — "
+                    + (f"[ver aviso]({p['url']})" if p.get("url") else "sin link"))
+
+    st.caption(
+        "Ubicaciones aproximadas (~100 m): Mudafy las publica redondeadas"
+        + (" y el demo redondea todas." if use_demo else ".")
+    )
+    if unlocated:
+        st.caption(
+            f"{unlocated} de {len(filtered)} avisos sin ubicación, no se muestran en el "
+            "mapa (Zonaprop y Argenprop no la publican en el listado)."
+        )
