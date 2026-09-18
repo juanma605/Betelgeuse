@@ -10,16 +10,19 @@ search:
     - "Palermo"
     - "Belgrano"
     - "Recoleta"
+    - "Almagro"
+    - "Caballito"
+    - "Villa Crespo"
   # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
   # usando fx_rates (abajo) o se descartan si no hay cotización.
   currency: USD
 
-  price_min: 50000
-  price_max: 140000
+  price_min: 40000
+  price_max: 180000
 
   # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
   filters:
-    covered_area_min: 40        # m² cubiertos
+    covered_area_min: 30        # m² cubiertos
     covered_area_max: null
     total_area_min: null
     rooms_min: null            # ambientes
@@ -74,7 +77,9 @@ sources:
     # misma sesión, que es justo donde vimos gatillarse Cloudflare).
     property_slug: departamentos   # departamentos | casas | ph
     operation_slug: venta          # venta | alquiler | alquiler-temporario
-    rate_limit_seconds: 4.0
+    # Subido de 4 a 8: con 4 segundos Cloudflare cortaba las tres zonas en la
+    # primera o segunda página y traíamos un tercio de lo permitido.
+    rate_limit_seconds: 8.0
     # El robots.txt del sitio solo permite indexar hasta la página 5
     # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
     # Es un tope duro: aunque pongas más, el código lo recorta a 5.
@@ -85,7 +90,7 @@ sources:
     # Arman la URL como /<property_slug>/<operation_slug>/<zona>
     property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
-    rate_limit_seconds: 4.0
+    rate_limit_seconds: 8.0        # mismo motivo que Zonaprop (misma empresa, mismo anti-bot)
     # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
     max_pages: 3
 
@@ -105,7 +110,7 @@ sources:
     # Arma la URL como <property_slug>-en-<operation_slug>-en-<zona>
     property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
-    rate_limit_seconds: 4.0
+    rate_limit_seconds: 6.0        # cortaba 2 de 3 zonas con 4
     # A diferencia de las otras 3 fuentes, el robots.txt de Remax es muy
     # permisivo (solo banea a AhrefsBot y `?associate`) y sí soporta
     # paginación real vía `?page=N` — no hay tope duro del sitio, esto es
