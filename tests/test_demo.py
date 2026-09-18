@@ -16,7 +16,7 @@ def base_de_prueba(path) -> None:
                 "zone": "Almagro", "neighborhood": "Almagro Sur", "city": "CABA",
                 "latitude": -34.6065431, "longitude": -58.4201234,
                 "price_norm": 115_000, "covered_area": 48, "rooms": 2,
-                "fingerprint": "f4cc6e16dbecfad3",
+                "fingerprint": "2ed318b6f4ba8ac1",
                 "raw": '{"secreto": "json crudo del portal"}',
             },
             {
@@ -53,7 +53,7 @@ def test_export_anonimiza_y_conserva_el_historial(tmp_path):
     assert (pozo["price_norm"], pozo["covered_area"]) == (115_000, 48)
     # El fingerprint se conserva tal cual: es lo que hace que el demo siga
     # sirviendo para detectar el mismo inmueble publicado por dos agencias.
-    assert pozo["fingerprint"] == "f4cc6e16dbecfad3"
+    assert pozo["fingerprint"] == "2ed318b6f4ba8ac1"
 
     huerfanos = conn.execute(
         "SELECT COUNT(*) FROM price_snapshots WHERE listing_id NOT IN (SELECT id FROM listings)"

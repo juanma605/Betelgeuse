@@ -7,6 +7,7 @@ a un esquema común, convertimos monedas y aplicamos los filtros del config.
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import unicodedata
 from typing import Any
@@ -54,6 +55,12 @@ def fingerprint(item: dict, area_tolerance: float = 2, price_tolerance_pct: floa
     """Huella difusa para detectar el mismo inmueble publicado por varias
     inmobiliarias. Redondeamos área y precio a "cubetas" del tamaño de la
     tolerancia para que valores cercanos caigan en la misma clave.
+
+    El precio va en escala logarítmica porque la tolerancia es porcentual: un
+    paso fijo de 5% sirve para 60.000 y es ridículo para 600.000. Ojo con el
+    borde: dos valores dentro de la tolerancia caen casi siempre en la misma
+    cubeta, pero si quedan a cada lado de un límite, no. Es una huella para
+    juntar *candidatos*, no una prueba.
     """
     zone = slug(item.get("neighborhood") or item.get("zone"))
     rooms = item.get("rooms") or 0
@@ -62,8 +69,11 @@ def fingerprint(item: dict, area_tolerance: float = 2, price_tolerance_pct: floa
     area_bucket = round(area / area_tolerance) if area_tolerance else area
 
     price = item.get("price_norm") or 0
-    step = max(price * price_tolerance_pct / 100, 1) if price else 1
-    price_bucket = round(price / step) if price else 0
+    price_bucket = (
+        round(math.log(price) / math.log(1 + price_tolerance_pct / 100))
+        if price > 0
+        else 0
+    )
 
     key = f"{zone}|{rooms}|{area_bucket}|{price_bucket}"
     return hashlib.sha1(key.encode()).hexdigest()[:16]

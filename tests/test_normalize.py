@@ -90,9 +90,19 @@ def test_fingerprint_separa_inmuebles_distintos():
     assert fingerprint(a) != fingerprint(b)
 
 
+def test_fingerprint_separa_por_precio_aunque_el_resto_sea_igual():
+    # Regresión: la cubeta de precio se calculaba con un paso proporcional al
+    # propio precio, así que `precio / paso` daba siempre 20 y el precio no
+    # participaba de la huella. Dos deptos del mismo barrio, ambientes y m²
+    # quedaban como "el mismo inmueble" costara lo que costara.
+    barato = {"neighborhood": "Almagro", "rooms": 2, "covered_area": 50, "price_norm": 80_000}
+    caro = {"neighborhood": "Almagro", "rooms": 2, "covered_area": 50, "price_norm": 160_000}
+    assert fingerprint(barato) != fingerprint(caro)
+
+
 def test_fingerprint_es_estable_entre_corridas():
     # Hardcodeado a propósito: si cambia la forma de armar la clave, las
     # huellas viejas de la base dejan de matchear con las nuevas y los
     # duplicados detectados hasta hoy se pierden en silencio.
     item = {"neighborhood": "Almagro", "rooms": 2, "covered_area": 50, "price_norm": 115_000}
-    assert fingerprint(item) == "f4cc6e16dbecfad3"
+    assert fingerprint(item) == "2ed318b6f4ba8ac1"
