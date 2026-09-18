@@ -147,11 +147,13 @@ alerts:
     enabled: true
     smtp_host: "smtp.gmail.com"        # ej. smtp.gmail.com
     smtp_port: 587
-    smtp_user: "juanmartinsantamarina@gmail.com"
-    smtp_password: "env:SMTP_PASSWORD"  # con Gmail: contraseña de aplicación, no la de tu cuenta. Va en .env, nunca acá.
-    from_addr: "juanmartinsantamarina@gmail.com"
+    # Los mails van en el .env, no acá: este archivo está en un repo público
+    # y una dirección suelta en GitHub termina indexada y llena de spam.
+    smtp_user: "env:SMTP_USER"
+    smtp_password: "env:SMTP_PASSWORD"  # con Gmail: contraseña de aplicación, no la de tu cuenta.
+    # Si no ponés from_addr, se usa smtp_user.
     to_addrs:
-      - "juanmartinsantamarina@gmail.com"
+      - "env:ALERT_TO"
     # Avisar solo si el aviso supera este score de oportunidad (0-100).
     min_score: 70
 
