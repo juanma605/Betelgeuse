@@ -1,4 +1,7 @@
 __pycache__/
 *.pyc
-data/
+data/*
+# El dataset de demo sí se versiona: es lo que hace al repo probable desde
+# afuera (ver README). Está anonimizado, no trae avisos de los portales.
+!data/demo.db
 .env

@@ -1,8 +1,12 @@
 """CLI.
 
-    python -m inmobot scrape    # trae avisos y guarda snapshot de precios
-    python -m inmobot analyze   # estadísticas de mercado y oportunidades
-    python -m inmobot export    # vuelca resultados a CSV
+    python -m inmobot scrape        # trae avisos y guarda snapshot de precios
+    python -m inmobot analyze       # estadísticas de mercado y oportunidades
+    python -m inmobot export        # vuelca resultados a CSV
+    python -m inmobot demo-export   # copia anonimizada de la base para el repo
+
+`analyze` y `export` aceptan `--demo`: corren contra data/demo.db en vez de
+la base real, sin red ni credenciales.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import alerts, analyze, db, normalize
+from . import alerts, analyze, db, demo, normalize
 from .config import load as load_config
 from .sources import argenprop, mercadolibre, mudafy, remax, zonaprop
 
@@ -87,37 +91,48 @@ def cmd_scrape(cfg) -> None:
             )
 
 
-def cmd_analyze(cfg, export_dir: Path | None = None) -> None:
+def cmd_analyze(cfg, export_dir: Path | None = None, use_demo: bool = False) -> None:
     acfg = cfg["analysis"]
 
-    with db.connect(cfg.get_path("storage.path")) as conn:
+    with db.connect(demo.db_path(cfg, use_demo)) as conn:
         df = analyze.load_active(conn)
         if df.empty:
             log.warning("No hay avisos activos. Corré 'scrape' primero.")
             return
 
         drops = analyze.price_drops(conn)
+        history = analyze.history_note(conn)
 
     stats = analyze.zone_stats(df, acfg)
     under = analyze.find_undervalued(df, acfg)
     stale = analyze.stale_listings(df, acfg)
-    dupes = analyze.duplicate_candidates(df)
+    # Los títulos del demo son sintéticos y salen de los mismos campos que el
+    # fingerprint: compararlos daría siempre ~1 de similitud.
+    dupes = analyze.duplicate_candidates(df, compare_titles=not use_demo)
     scored = analyze.opportunity_score(under if not under.empty else df, drops, acfg)
 
-    print(f"\n{len(df)} avisos activos\n")
+    print(f"\n{len(df)} avisos activos{' (dataset de demo, anonimizado)' if use_demo else ''}\n")
 
-    if not stats.empty:
-        print("=== Precio por m² (mediana, en moneda de comparación) ===")
+    print("=== Precio por m² (mediana, en moneda de comparación) ===")
+    if stats.empty:
+        print(analyze.comparables_note(df, acfg), "\n")
+    else:
         print(stats.round(0).to_string(index=False), "\n")
 
+    print(f"=== Subvaluados (>= {acfg['undervalued_threshold_pct']}% bajo la mediana) ===")
     if not under.empty:
-        print(f"=== Subvaluados (>= {acfg['undervalued_threshold_pct']}% bajo la mediana) ===")
         cols = ["title", "zone", "area", "price_norm", "discount_pct", "url"]
         print(under[cols].head(15).round(1).to_string(index=False), "\n")
+    elif stats.empty:
+        print("Sin medianas de referencia no hay contra qué comparar.\n")
+    else:
+        print("Ningún aviso quedó por debajo del umbral.\n")
 
+    print("=== Bajaron de precio ===")
     if not drops.empty:
-        print("=== Bajaron de precio ===")
         print(drops.head(15).round(1).to_string(index=False), "\n")
+    else:
+        print(history or "Ningún aviso bajó de precio todavía.", "\n")
 
     if not stale.empty:
         print(f"=== Publicados hace más de {acfg['stale_days']} días ===")
@@ -125,6 +140,8 @@ def cmd_analyze(cfg, export_dir: Path | None = None) -> None:
 
     if not dupes.empty:
         print("=== Mismo inmueble en varias publicaciones ===")
+        if use_demo:
+            print("(solo por fingerprint: sin títulos reales no se puede filtrar por similitud)")
         print(dupes[["fingerprint", "title", "price_norm", "spread_pct"]].head(15).round(1).to_string(index=False), "\n")
 
     if export_dir:
@@ -137,16 +154,35 @@ def cmd_analyze(cfg, export_dir: Path | None = None) -> None:
                 frame.to_csv(export_dir / f"{name}.csv", index=False)
         log.info("CSVs escritos en %s", export_dir)
 
-    sent = alerts.send_email_alerts(scored, cfg.get_path("alerts.email", {}) or {})
-    if sent:
-        log.info("Alerta por mail: %d aviso(s) por encima del score mínimo.", sent)
+    # El demo tiene que correr sin red: no se manda mail sobre datos viejos
+    # y anonimizados de una base que no es la del que lo está probando.
+    if not use_demo:
+        sent = alerts.send_email_alerts(scored, cfg.get_path("alerts.email", {}) or {})
+        if sent:
+            log.info("Alerta por mail: %d aviso(s) por encima del score mínimo.", sent)
+
+
+def cmd_demo_export(cfg, out: str, limit: int | None) -> None:
+    stats = demo.export(cfg.get_path("storage.path"), out, limit)
+    log.info(
+        "Demo escrito en %s: %d avisos de %d zonas, %d snapshots de precio.",
+        out, stats["listings"], stats["zones"], stats["snapshots"],
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="inmobot")
-    parser.add_argument("command", choices=["scrape", "analyze", "export"])
+    parser.add_argument("command", choices=["scrape", "analyze", "export", "demo-export"])
     parser.add_argument("-c", "--config", default="config.yaml")
-    parser.add_argument("-o", "--out", default="data/reports")
+    parser.add_argument("-o", "--out", default=None)
+    parser.add_argument(
+        "--demo", action="store_true",
+        help="analizar data/demo.db en vez de la base real (sin red ni credenciales)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=500,
+        help="tope aproximado de avisos a exportar en demo-export",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -159,9 +195,11 @@ def main() -> None:
     if args.command == "scrape":
         cmd_scrape(cfg)
     elif args.command == "analyze":
-        cmd_analyze(cfg)
+        cmd_analyze(cfg, use_demo=args.demo)
+    elif args.command == "demo-export":
+        cmd_demo_export(cfg, args.out or demo.DEMO_DB_PATH, args.limit)
     else:
-        cmd_analyze(cfg, export_dir=Path(args.out))
+        cmd_analyze(cfg, export_dir=Path(args.out or "data/reports"), use_demo=args.demo)
 
 
 if __name__ == "__main__":

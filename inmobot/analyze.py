@@ -25,7 +25,7 @@ import pandas as pd
 # es reventa normal, "reciclaje completo" en cambio describe un edificio
 # entero vendido como proyecto — perderíamos comparables válidos si
 # excluyéramos cualquier reventa que mencione una reforma pasada.
-_OFF_PLAN_PATTERN = re.compile(
+OFF_PLAN_PATTERN = re.compile(
     r"emprendimiento|xintel|en construcci|a estrenar|pozo|proyecto\b"
     r"|desarrollo|proyecta|reciclaje completo",
     re.IGNORECASE,
@@ -39,7 +39,7 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df["area"] = df["covered_area"].fillna(df["total_area"])
     df = df[(df["area"] > 0) & (df["price_norm"] > 0)]
     df["price_per_m2"] = df["price_norm"] / df["area"]
-    df["off_plan"] = df["title"].fillna("").str.contains(_OFF_PLAN_PATTERN)
+    df["off_plan"] = df["title"].fillna("").str.contains(OFF_PLAN_PATTERN)
     return df
 
 
@@ -51,30 +51,35 @@ def _trim_outliers(series: pd.Series, trim_pct: float) -> pd.Series:
     return series[(series >= low) & (series <= high)]
 
 
-def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Mediana y percentiles de precio/m² por zona y cantidad de ambientes.
+def comparable_pool(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Los avisos que tienen derecho a definir qué es "precio de mercado".
 
     Excluye off_plan (pozo/emprendimientos): su precio/m² no es comparable
     con el de reventa y distorsiona la mediana. También excluye avisos
     publicados hace más de `stale_days`: si algo no se vende en tanto
     tiempo probablemente algo lo saca del precio normal (para bien o para
-    mal) y no debería fijar qué es "precio de mercado". Ojo: esto NO los
-    saca de `find_undervalued` — un aviso viejo *y* barato es justo la
-    oportunidad de negociación que el proyecto busca, solo no debe ser él
-    mismo quien define la mediana contra la que se lo compara.
+    mal). Ojo: esto NO los saca de `find_undervalued` — un aviso viejo *y*
+    barato es justo la oportunidad de negociación que el proyecto busca,
+    solo no debe ser él mismo quien define la mediana contra la que se lo
+    compara.
     """
+    pool = df[~df["off_plan"]] if "off_plan" in df.columns else df
+    if "first_seen" in pool.columns:
+        first_seen = pd.to_datetime(pool["first_seen"], format="ISO8601", utc=True)
+        days_listed = (datetime.now(timezone.utc) - first_seen).dt.days
+        pool = pool[days_listed <= cfg.get("stale_days", 60)]
+    return pool
+
+
+def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Mediana y percentiles de precio/m² por zona y cantidad de ambientes."""
     trim = cfg.get("outlier_trim_pct", 5)
     min_n = cfg.get("min_comparables", 20)
-    stale_days = cfg.get("stale_days", 60)
-
-    resale = df[~df["off_plan"]] if "off_plan" in df.columns else df
-    if "first_seen" in resale.columns:
-        first_seen = pd.to_datetime(resale["first_seen"], format="ISO8601", utc=True)
-        days_listed = (datetime.now(timezone.utc) - first_seen).dt.days
-        resale = resale[days_listed <= stale_days]
 
     rows = []
-    for (zone, rooms), group in resale.groupby(["zone", "rooms"], dropna=False):
+    for (zone, rooms), group in comparable_pool(df, cfg).groupby(
+        ["zone", "rooms"], dropna=False
+    ):
         clean = _trim_outliers(group["price_per_m2"], trim)
         if len(clean) < min_n:
             continue
@@ -88,6 +93,58 @@ def zone_stats(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         })
 
     return pd.DataFrame(rows)
+
+
+def comparables_note(df: pd.DataFrame, cfg: dict) -> str:
+    """Por qué `zone_stats` no devolvió nada, en castellano.
+
+    Una tabla vacía no dice si el problema son pocos datos, un umbral alto o
+    un bug. Como el diagnóstico se calcula solo, el día que el cron junte
+    suficientes avisos la sección aparece sin tocar código.
+    """
+    min_n = cfg.get("min_comparables", 20)
+    trim = cfg.get("outlier_trim_pct", 5)
+
+    pool = comparable_pool(df, cfg)
+    if pool.empty:
+        return (
+            f"No quedan comparables: los {len(df)} avisos activos son de pozo o "
+            f"llevan más de {cfg.get('stale_days', 60)} días publicados."
+        )
+
+    sizes = {
+        key: len(_trim_outliers(group["price_per_m2"], trim))
+        for key, group in pool.groupby(["zone", "rooms"], dropna=False)
+    }
+    (zone, rooms), biggest = max(sizes.items(), key=lambda kv: kv[1])
+    return (
+        f"Ningún grupo zona/ambientes llega a analysis.min_comparables={min_n}: "
+        f"el más grande es {zone} / {rooms} amb con {biggest} avisos "
+        f"(de {len(pool)} comparables en {len(sizes)} grupos). "
+        "El umbral está para que una mediana de 3 avisos no pase por mercado — "
+        "se resuelve juntando corridas, no bajándolo."
+    )
+
+
+def history_note(conn: sqlite3.Connection) -> str | None:
+    """Por qué todavía no puede haber bajas de precio, o None si ya puede.
+
+    Hace falta ver el mismo aviso en dos corridas distintas para saber si
+    bajó. Con una sola corrida `price_drops` viene vacío y eso no es un
+    error: es el estado inicial de cualquier instalación nueva.
+    """
+    row = conn.execute(
+        "SELECT COALESCE(MAX(n), 0) AS max_obs FROM "
+        "(SELECT COUNT(*) AS n FROM price_snapshots GROUP BY listing_id)"
+    ).fetchone()
+    max_obs = row["max_obs"]
+    if max_obs >= 2:
+        return None
+    return (
+        "Historial de precios: hace falta ver un mismo aviso en al menos 2 "
+        f"corridas. Ahora el máximo es {max_obs}. Corré `scrape` de nuevo "
+        "en unos días (o poné el cron) y la sección se llena sola."
+    )
 
 
 def find_undervalued(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
@@ -153,19 +210,28 @@ def stale_listings(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return out.sort_values("days_listed", ascending=False)
 
 
-def duplicate_candidates(df: pd.DataFrame, title_similarity: float = 0.6) -> pd.DataFrame:
+def duplicate_candidates(
+    df: pd.DataFrame,
+    title_similarity: float = 0.6,
+    compare_titles: bool = True,
+) -> pd.DataFrame:
     """Mismo inmueble publicado más de una vez: revela el margen entre agencias.
 
     El fingerprint solo (zona + ambientes + área + precio) genera muchísimos
     falsos positivos: en Almagro hay cientos de 2 ambientes de 50 m² a 115k que
     no son el mismo departamento. Por eso exigimos además que los títulos se
     parezcan. Son *candidatos*: la confirmación final es mirar las fotos.
+
+    `compare_titles=False` desactiva ese segundo filtro. Lo usa el dataset de
+    demo, donde los títulos son sintéticos y derivan de los mismos campos que
+    el fingerprint: compararlos daría similitud ~1 siempre, o sea un filtro
+    que no filtra nada y encima parece que sí.
     """
     counts = df.groupby("fingerprint").size()
     repeated = counts[counts > 1].index
     dupes = df[df["fingerprint"].isin(repeated)].copy()
-    if dupes.empty:
-        return dupes
+    if dupes.empty or not compare_titles:
+        return _with_spread(dupes)
 
     keep_groups = []
     for fp, group in dupes.groupby("fingerprint"):
@@ -178,10 +244,13 @@ def duplicate_candidates(df: pd.DataFrame, title_similarity: float = 0.6) -> pd.
         if pairs and max(pairs) >= title_similarity:
             keep_groups.append(fp)
 
-    dupes = dupes[dupes["fingerprint"].isin(keep_groups)]
+    return _with_spread(dupes[dupes["fingerprint"].isin(keep_groups)])
+
+
+def _with_spread(dupes: pd.DataFrame) -> pd.DataFrame:
+    """Agrega cuánto se separan entre sí los precios de un mismo inmueble."""
     if dupes.empty:
         return dupes
-
     spread = dupes.groupby("fingerprint")["price_norm"].agg(["min", "max"])
     spread["spread_pct"] = (spread["max"] - spread["min"]) / spread["min"] * 100
     return dupes.merge(spread, on="fingerprint").sort_values(

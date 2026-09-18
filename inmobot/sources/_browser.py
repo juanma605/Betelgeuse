@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from playwright.sync_api import sync_playwright
-
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -36,7 +34,14 @@ def is_bot_challenge(page) -> bool:
 
 @contextmanager
 def browser_page():
-    """Contexto con una página de Chromium headless lista para navegar."""
+    """Contexto con una página de Chromium headless lista para navegar.
+
+    El import va acá adentro a propósito: `analyze --demo` y los tests
+    importan las fuentes para leer sus `_map()`, y tienen que funcionar en
+    una máquina sin Playwright instalado. Solo scrapear lo necesita.
+    """
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(

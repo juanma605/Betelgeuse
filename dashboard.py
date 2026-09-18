@@ -1,6 +1,7 @@
 """Dashboard de mercado sobre la base de inmobot.
 
     streamlit run dashboard.py
+    streamlit run dashboard.py -- --demo   # contra data/demo.db, sin credenciales
 
 Filtros + tabla ordenable + promedios por zona + destacados (avisos que se
 alejan del promedio de su propio grupo zona/ambientes) + mapa si hay
@@ -10,17 +11,32 @@ explorar, no para el reporte "oficial" de subvaluados.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
-from inmobot import analyze, config, db
+from inmobot import analyze, config, db, demo
 
 st.set_page_config(page_title="inmobot", layout="wide")
 st.title("inmobot — mercado en vivo")
 
 cfg = config.load("config.yaml")
-with db.connect(cfg.get_path("storage.path")) as conn:
+# Sin `--demo`, el dashboard cae igual al demo si no hay base real: alguien
+# que acaba de clonar el repo no tiene una, y una pantalla vacía no muestra
+# nada del proyecto.
+use_demo = "--demo" in sys.argv or not Path(cfg.get_path("storage.path")).exists()
+
+with db.connect(demo.db_path(cfg, use_demo)) as conn:
     df = analyze.load_active(conn)
     drops = analyze.price_drops(conn)
+    history = analyze.history_note(conn)
+
+if use_demo:
+    st.info(
+        "Dataset de demo: avisos reales anonimizados (sin título, URL ni JSON "
+        "del portal). Para ver datos propios: `python -m inmobot scrape`."
+    )
 
 if df.empty:
     st.warning("No hay avisos activos. Corré `python -m inmobot scrape` primero.")
@@ -91,11 +107,12 @@ _TABLE_CSS = """
 
 def _table_with_link(frame: "pd.DataFrame") -> None:
     """Tabla HTML con el título como link al aviso (st.dataframe no permite
-    que una columna linkee usando el texto de otra)."""
+    que una columna linkee usando el texto de otra). En el demo no hay URL:
+    queda el texto solo."""
     display = frame.copy()
     short_title = display["title"].str.slice(0, 55)
     display["title"] = [
-        f'<a href="{u}" target="_blank" title="{t}">{s}…</a>'
+        f'<a href="{u}" target="_blank" title="{t}">{s}…</a>' if u else s
         for t, s, u in zip(display["title"], short_title, display["url"])
     ]
     table_html = display[linked_cols].round(1).to_html(escape=False, index=False)
@@ -116,7 +133,7 @@ with col_b:
 st.subheader("Bajaron de precio")
 zone_drops = drops[drops["listing_id"].isin(filtered["id"])] if not drops.empty else drops
 if zone_drops.empty:
-    st.caption("Todavía sin bajas de precio detectadas (hace falta más de una corrida).")
+    st.caption(history or "Ningún aviso de los filtrados bajó de precio todavía.")
 else:
     with_title = zone_drops.merge(
         filtered[["id", "title", "zone", "url"]], left_on="listing_id", right_on="id"
