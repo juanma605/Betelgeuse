@@ -117,6 +117,30 @@ def test_remax_map():
     assert item["photo_count"] == 3
 
 
+def test_remax_saca_las_coordenadas_del_estado_de_la_pagina():
+    state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
+    coords = remax.coords_by_slug(state)
+
+    # GeoJSON viene [lon, lat]: si se dieran vuelta, los puntos caerían en
+    # el océano Antártico y nadie lo notaría hasta abrir el mapa.
+    assert coords["venta-departamento-dos-ambientes-con-balcon"] == (-34.6102, -58.4201)
+    assert "venta-monoambiente-sin-ubicacion" not in coords
+    assert len(coords) == 2
+    assert remax.coords_by_slug("") == {}
+
+
+def test_mudafy_no_le_presta_coordenadas_a_un_aviso_que_no_las_tiene():
+    html = (FIXTURES / "mudafy_payload.html").read_text(encoding="utf-8")
+    coords = mudafy.coords_by_id(html)
+
+    # Indexado por el mismo id que usa _map() (el sufijo numérico del slug).
+    assert coords["680464"] == (-34.614, -58.419)
+    assert coords["201734"] == (-34.617, -58.416)
+    # El del medio no trae coordenadas: no puede quedarse con las del
+    # siguiente aviso ni con el `barycenter` del barrio.
+    assert "157315" not in coords
+
+
 def test_mercadolibre_map():
     """El fixture está armado a mano (la API responde 403 sin certificación),
     así que fija el mapeo de `attributes`, no que ML siga contestando igual."""

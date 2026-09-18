@@ -12,6 +12,7 @@ por corrida.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -27,6 +28,11 @@ BASE = "https://www.remax.com.ar"
 MAX_PAGES = 3
 
 CARD_SELECTOR = ".card-remax"
+
+# Angular deja los resultados de la búsqueda serializados en este <script>
+# (transfer state) para no volver a pedirlos en el cliente. Ahí viene la
+# ubicación de cada aviso, que la tarjeta no muestra.
+STATE_JS = "() => document.getElementById('ng-state')?.textContent || ''"
 
 _FEATURE_PATTERNS = [
     (re.compile(r"([\d.,]+)\s*m²\s*totales"), "total_area"),
@@ -78,9 +84,13 @@ class RemaxSource:
                 if not cards:
                     return
 
+                coords = coords_by_slug(page_obj.evaluate(STATE_JS))
                 for card in cards:
                     item = self._map(card, zone)
                     if item:
+                        lat_lon = coords.get(item["source_id"])
+                        if lat_lon:
+                            item["latitude"], item["longitude"] = lat_lon
                         yield item
 
                 if page_num < self.max_pages:
@@ -133,6 +143,32 @@ class RemaxSource:
                     break
 
         return item
+
+
+def coords_by_slug(state_json: str | None) -> dict[str, tuple[float, float]]:
+    """{slug: (lat, lon)} a partir del transfer state de la página.
+
+    Se recorre el JSON entero buscando objetos con `slug` y `location` en vez
+    de ir a una ruta fija: la clave de primer nivel es un hash que Angular
+    cambia entre builds. Ojo con el orden: es GeoJSON, `[lon, lat]`.
+    """
+    try:
+        stack = [json.loads(state_json or "")]
+    except ValueError:
+        return {}
+    out: dict[str, tuple[float, float]] = {}
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            loc = node.get("location")
+            pair = loc.get("coordinates") if isinstance(loc, dict) else None
+            if isinstance(node.get("slug"), str) and isinstance(pair, list) and len(pair) == 2:
+                lon, lat = pair
+                out[node["slug"]] = (float(lat), float(lon))
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return out
 
 
 def build(conf: dict) -> RemaxSource:

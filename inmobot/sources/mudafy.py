@@ -28,6 +28,12 @@ log = logging.getLogger(__name__)
 
 BASE = "https://www.mudafy.com.ar"
 
+# Next.js manda los datos de la página serializados en el HTML (escapados
+# dentro de un string de JS). Cada aviso es un objeto `publication` con el
+# mismo slug que el href de la tarjeta, y adentro trae sus coordenadas.
+_PUBLICATION = re.compile(r'\{"publication":\{"id":\d+,"slug":"([^"]+)"')
+_COORDINATES = re.compile(r'"coordinates":\{"latitude":(-?[\d.]+),"longitude":(-?[\d.]+)\}')
+
 # Ícono (lucide-<esto>) -> campo de nuestro esquema. "toilet" y "car" no
 # tienen equivalente en el esquema, se ignoran.
 _ICON_MAP = {
@@ -89,10 +95,14 @@ class MudafySource:
                 log.info("[mudafy] corto en %s/%s: %s", property_slug, zone, exc)
             return
 
+        coords = coords_by_id(page_obj.content())
         cards = page_obj.query_selector_all(card_selector)
         for card in cards:
             item = self._map(card, zone)
             if item:
+                lat_lon = coords.get(item["source_id"])
+                if lat_lon:
+                    item["latitude"], item["longitude"] = lat_lon
                 yield item
 
     # ---------------------------------------------------------------- #
@@ -152,6 +162,30 @@ def _parse_subtitle(text: str | None) -> tuple[str | None, str | None]:
     neighborhood = parts[0] if parts and parts[0] else None
     city = parts[1] if len(parts) > 1 else None
     return neighborhood, city
+
+
+def coords_by_id(html: str) -> dict[str, tuple[float, float]]:
+    """{id del aviso: (lat, lon)} a partir del HTML de la página.
+
+    Las coordenadas de cada aviso se buscan solo entre su `publication` y la
+    siguiente, para no asignarle las de un vecino si a alguno le faltan.
+    Mudafy ya las publica redondeadas a 3 decimales (~100 m): son aproximadas
+    de origen. El `round(…, 6)` solo limpia el ruido de float
+    (-34.611000000000004).
+    """
+    text = html.replace('\\"', '"')
+    starts = list(_PUBLICATION.finditer(text))
+    out: dict[str, tuple[float, float]] = {}
+    for i, pub in enumerate(starts):
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+        found = _COORDINATES.search(text, pub.end(), end)
+        listing_id = re.search(r"-(\d+)$", pub.group(1))
+        if found and listing_id:
+            out[listing_id.group(1)] = (
+                round(float(found.group(1)), 6),
+                round(float(found.group(2)), 6),
+            )
+    return out
 
 
 def build(conf: dict) -> MudafySource:
