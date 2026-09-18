@@ -5,18 +5,55 @@ Scraping y análisis de avisos inmobiliarios, con todo parametrizado en `config.
 No junta avisos: construye el mercado. Precio por m² por zona, detección de
 subvaluados, historial de precios y candidatos a duplicado entre agencias.
 
+## Probarlo en dos minutos, sin credenciales
+
+El repo trae `data/demo.db`: avisos reales anonimizados, con su historial de
+precios. No hace falta ni `.env` ni Playwright ni esperar un scrape.
+
+```bash
+pip install -r requirements.txt
+python -m inmobot analyze --demo
+streamlit run dashboard.py -- --demo
+```
+
+El demo conserva la **estructura** (precio, m², ambientes, zona, fechas,
+snapshots) y descarta el **contenido** de los portales: sin título original,
+sin URL, sin el JSON crudo, y con las coordenadas redondeadas a ~100 m. El
+título que se ve está reconstruido con los campos numéricos del propio aviso
+("2 amb · 48 m² · Almagro"). Scrapear para analizar es una cosa; republicar
+los avisos de otro es otra, y este repo no hace la segunda.
+
+Es un dataset chico a propósito (una base de pocas corridas), así que
+`analysis.min_comparables: 20` deja casi todos los grupos afuera y el análisis
+lo dice en pantalla en vez de imprimir una tabla vacía. El umbral se queda como
+está: una mediana de tres avisos no es un precio de mercado. Con más corridas
+acumuladas la sección se enciende sola.
+
+Para regenerarlo desde tu propia base:
+
+```bash
+python -m inmobot demo-export                      # -> data/demo.db
+python -m inmobot demo-export --limit 300 --out /tmp/chico.db
+```
+
+Es determinístico (dos corridas sobre la misma base dan el mismo archivo) y
+muestrea estratificado por zona, conservando enteros los grupos
+zona/ambientes: un demo sesgado a un solo barrio no mostraría nada.
+
 ## Instalación
 
 ```bash
-pip install httpx pandas pyyaml
+pip install -r requirements.txt
+playwright install chromium   # solo para scrapear los portales sin API
 ```
 
 ## Uso
 
 ```bash
-python -m inmobot scrape     # trae avisos y guarda un snapshot de precios
-python -m inmobot analyze    # imprime el análisis en consola
-python -m inmobot export     # además vuelca todo a data/reports/*.csv
+python -m inmobot scrape        # trae avisos y guarda un snapshot de precios
+python -m inmobot analyze       # imprime el análisis en consola
+python -m inmobot export        # además vuelca todo a data/reports/*.csv
+python -m inmobot demo-export   # copia anonimizada de la base para el repo
 ```
 
 Poné el `scrape` en un cron diario. El valor del proyecto crece con cada corrida:
@@ -48,11 +85,14 @@ más.
 
 ## Estado actual
 
-- **MercadoLibre**: implementado. API pública, JSON estructurado, sin anti-bot.
-- **Zonaprop / Argenprop**: el hueco está armado (`sources` en el config, registro
-  en `cli.SOURCE_BUILDERS`) pero falta escribir el fetcher. Necesitan Playwright,
-  headers reales y rate limit de 3-5 s. Son de la misma empresa y tienen
-  protección anti-bot seria.
+- **Zonaprop, Argenprop, Mudafy, Remax**: implementados con Playwright, rate
+  limit de 4 s y el tope de páginas que fija el `robots.txt` de cada uno.
+  Zonaprop y Argenprop cortan con verificación de Cloudflare cada tanto: el
+  scraper la detecta, corta esa zona y avisa — no la esquiva.
+- **MercadoLibre**: implementado y apagado. La búsqueda quedó detrás de un gate
+  de certificación de app: con un `access_token` válido igual devuelve 403
+  (`PolicyAgent`). El código y el config quedan listos por si se resuelve del
+  otro lado.
 
 Para agregar una fuente: creá `inmobot/sources/tufuente.py` con una clase que
 exponga `fetch(zone, search_cfg)` devolviendo dicts con las claves del esquema
