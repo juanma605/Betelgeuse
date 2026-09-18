@@ -112,6 +112,8 @@ class ArgenpropSource:
         neighborhood, city = _parse_subtitle(
             subtitle_el.inner_text() if subtitle_el else None
         )
+        if not neighborhood and address_el:
+            neighborhood = _neighborhood_from_address(address_el.inner_text())
         title = (title_el.inner_text().strip() if title_el else None) or zone
 
         item: dict = {
@@ -169,6 +171,20 @@ def _parse_subtitle(text: str | None) -> tuple[str | None, str | None]:
     idx = head.lower().rfind(" en ")
     neighborhood = head[idx + 4 :].strip() if idx != -1 else head.strip()
     return neighborhood or None, (city.strip() if city else None)
+
+
+def _neighborhood_from_address(text: str | None) -> str | None:
+    """"Mexico 4200, Piso 3, Almagro Sur" -> "Almagro Sur".
+
+    Respaldo para cuando la tarjeta no trae `.card__title--primary`, que es
+    de donde salían barrio y ciudad. La dirección siempre termina en el
+    barrio, salvo que venga sin comas — ahí es solo la calle y preferimos
+    devolver nada antes que guardar "Bulnes 700" como si fuera un barrio.
+    """
+    if not text:
+        return None
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    return parts[-1] if len(parts) > 1 else None
 
 
 def build(conf: dict) -> ArgenpropSource:
