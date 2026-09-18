@@ -19,17 +19,24 @@ streamlit run dashboard.py -- --demo
 ```
 
 El demo conserva la **estructura** (precio, m², ambientes, zona, fechas,
-snapshots) y descarta el **contenido** de los portales: sin título original,
-sin URL, sin el JSON crudo, y con las coordenadas redondeadas a ~100 m. El
-título que se ve está reconstruido con los campos numéricos del propio aviso
-("2 amb · 48 m² · Almagro"). Scrapear para analizar es una cosa; republicar
-los avisos de otro es otra, y este repo no hace la segunda.
+snapshots) y el link a cada aviso, y descarta el **contenido** de los portales:
+sin título original y sin el JSON crudo. El título que se ve está reconstruido
+con los campos numéricos del propio aviso ("2 amb · 48 m² · Almagro"). Un link
+es un puntero a una página pública; el título y la descripción son texto del
+portal. Scrapear para analizar es una cosa; republicar los avisos de otro es
+otra, y este repo no hace la segunda.
 
-Es un dataset chico a propósito (una base de pocas corridas), así que
+Los links son los originales, así que **algunos van a estar caídos**: los avisos
+se dan de baja cuando se venden o se retiran, y el demo es una foto de un
+momento.
+
+Es un dataset chico (una base de pocas corridas), así que
 `analysis.min_comparables: 20` deja casi todos los grupos afuera y el análisis
-lo dice en pantalla en vez de imprimir una tabla vacía. El umbral se queda como
-está: una mediana de tres avisos no es un precio de mercado. Con más corridas
-acumuladas la sección se enciende sola.
+lo dice en pantalla en vez de imprimir una tabla vacía. Pesa además que las
+medianas se calculan solo con avisos que publican m² cubiertos, y Zonaprop y
+Mudafy no los muestran en el listado. El umbral se queda como está: una
+mediana de tres avisos no es un precio de mercado. Con más corridas acumuladas
+la sección se enciende sola.
 
 Para regenerarlo desde tu propia base:
 

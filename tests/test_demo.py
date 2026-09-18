@@ -40,7 +40,10 @@ def test_export_anonimiza_y_conserva_el_historial(tmp_path):
     filas = conn.execute("SELECT * FROM listings ORDER BY id").fetchall()
 
     assert [f["id"] for f in filas] == ["demo:0001", "demo:0002"]
-    assert all(f["url"] is None and f["raw"] is None for f in filas)
+    # El JSON crudo es contenido del portal y se va; la URL es un puntero a
+    # una página pública y se queda.
+    assert all(f["raw"] is None for f in filas)
+    assert filas[1]["url"] == "https://www.zonaprop.com.ar/propiedades/111.html"
 
     # La numeración sigue el orden del id original, así que "remax:222" queda
     # antes que "zonaprop:111".

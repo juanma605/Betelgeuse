@@ -6,9 +6,11 @@ cinco minutos: sin una base adentro del repo, el proyecto es imposible de
 probar desde afuera.
 
 Lo que el demo conserva es la **estructura** (precios, m², ambientes, zonas,
-fechas y todo el historial de precios); lo que tira es el **contenido** de los
-portales: título, URL y JSON crudo. Republicar avisos ajenos no hace falta
-para demostrar el análisis, y es justo lo que el proyecto dice que no hace.
+fechas, todo el historial de precios) y la URL de cada aviso; lo que tira es
+el **contenido** de los portales: el título y el JSON crudo. Una URL es un
+puntero a una página pública, no una copia de lo que hay en ella; el título y
+el JSON sí son texto del portal, y republicarlos no hace falta para demostrar
+el análisis.
 
 Regenerarlo cuando haya más historial es un comando y un commit:
 
@@ -47,7 +49,7 @@ def synthetic_title(row) -> str:
     No es el título del portal ni una paráfrasis: se reconstruye desde cero
     con datos que igual están en las otras columnas ("2 amb · 48 m² ·
     Almagro"). El sufijo de pozo es lo único que agrega información: sin él
-    se perdería la clasificación off_plan, que se calcula sobre el título y
+    se perdería la parte de la clasificación off_plan que sale del título, y
     es la que mantiene los emprendimientos afuera de las medianas.
     """
     parts = []
@@ -59,8 +61,9 @@ def synthetic_title(row) -> str:
     place = row["neighborhood"] or row["zone"]
     if place:
         parts.append(str(place))
-    # La URL se borra en el demo, así que la marca de pozo tiene que quedar
-    # en el título: es el único lugar donde sobrevive la clasificación.
+    # La URL sobrevive, pero las palabras clave del título original no: sin
+    # esta marca, un pozo detectado por "emprendimiento" en el título dejaría
+    # de serlo en el demo.
     if is_off_plan(row["title"], row["url"]):
         parts.append("emprendimiento en pozo")
     return " · ".join(parts) or "aviso"
@@ -71,7 +74,6 @@ def _anonymize(row, new_id: str) -> dict:
     item["id"] = new_id
     item["source_id"] = new_id
     item["title"] = synthetic_title(row)
-    item["url"] = None
     item["raw"] = None
     for coord in ("latitude", "longitude"):
         if item[coord] is not None:

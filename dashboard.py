@@ -34,8 +34,9 @@ with db.connect(demo.db_path(cfg, use_demo)) as conn:
 
 if use_demo:
     st.info(
-        "Dataset de demo: avisos reales anonimizados (sin título, URL ni JSON "
-        "del portal). Para ver datos propios: `python -m inmobot scrape`."
+        "Dataset de demo: avisos reales anonimizados (sin el título ni el JSON "
+        "del portal). Los links van al aviso original: si alguno está caído, "
+        "es que ya se dio de baja. Para ver datos propios: `python -m inmobot scrape`."
     )
 
 if df.empty:
@@ -122,8 +123,8 @@ _TABLE_CSS = """
 
 def _table_with_link(frame: "pd.DataFrame") -> None:
     """Tabla HTML con el título como link al aviso (st.dataframe no permite
-    que una columna linkee usando el texto de otra). En el demo no hay URL:
-    queda el texto solo."""
+    que una columna linkee usando el texto de otra). Sin URL queda el texto
+    solo."""
     display = frame.copy()
     short_title = display["title"].str.slice(0, 55)
     display["title"] = [
