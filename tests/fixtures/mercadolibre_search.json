@@ -1,0 +1,41 @@
+{
+  "_fixture_note": "Construido a mano con el esquema documentado de la API, NO capturado: /sites/MLA/search devuelve 403 sin certificacion de app. Fija el mapeo de attributes, no que ML siga contestando esto.",
+  "site_id": "MLA",
+  "paging": {"total": 1, "offset": 0, "limit": 50},
+  "results": [
+    {
+      "id": "MLA1234567890",
+      "title": "Departamento 3 Ambientes Con Balcon En Almagro",
+      "permalink": "https://departamento.mercadolibre.com.ar/MLA-1234567890-ejemplo-_JM",
+      "price": 145000,
+      "currency_id": "USD",
+      "thumbnail": "https://http2.mlstatic.com/D_NQ_NP_000000-MLA00000000000_000000-I.jpg",
+      "pictures": [
+        {"id": "000001", "url": "https://http2.mlstatic.com/D_NQ_NP_000001-I.jpg"},
+        {"id": "000002", "url": "https://http2.mlstatic.com/D_NQ_NP_000002-I.jpg"}
+      ],
+      "location": {
+        "address_line": "",
+        "neighborhood": {"id": "TUxBQkFMTTQzMjZa", "name": "Almagro"},
+        "city": {"id": "TUxBQ0NBUGZlZG1sYQ", "name": "Capital Federal"},
+        "state": {"id": "AR-C", "name": "Capital Federal"},
+        "latitude": -34.606543,
+        "longitude": -58.420123
+      },
+      "attributes": [
+        {"id": "COVERED_AREA", "name": "Superficie cubierta", "value_name": "72 m²",
+         "value_struct": {"number": 72, "unit": "m²"}},
+        {"id": "TOTAL_AREA", "name": "Superficie total", "value_name": "78 m²",
+         "value_struct": {"number": 78, "unit": "m²"}},
+        {"id": "ROOMS", "name": "Ambientes", "value_name": "3", "value_struct": null},
+        {"id": "BEDROOMS", "name": "Dormitorios", "value_name": "2", "value_struct": null},
+        {"id": "FULL_BATHROOMS", "name": "Baños", "value_name": "2", "value_struct": null},
+        {"id": "MAINTENANCE_FEE", "name": "Expensas", "value_name": "200000 $",
+         "value_struct": {"number": 200000, "unit": "$"}},
+        {"id": "PROPERTY_AGE", "name": "Antigüedad", "value_name": "25 años",
+         "value_struct": {"number": 25, "unit": "años"}},
+        {"id": "OPERATION", "name": "Operación", "value_name": "Venta", "value_struct": null}
+      ]
+    }
+  ]
+}
