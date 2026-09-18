@@ -98,6 +98,28 @@ conviene una regresión sobre área, ambientes, antigüedad y barrio.
 Leyendo `alerts.telegram` del config, disparando cuando aparece algo sobre
 `min_score`.
 
+## Pendientes para más adelante
+
+### Arreglar la API de MercadoLibre
+
+La fuente está apagada (`sources.mercadolibre.enabled: false`). El token no es
+el problema: `/sites/MLA/search` devuelve 403 `PolicyAgent` incluso con un
+`access_token` válido, porque la app figura `certification_status:
+not_certified`. Hay que ver si existe un camino a la certificación (o un
+endpoint alternativo que no la exija) antes de tocar código. El mapeo de
+`_map()` ya está fijado por `tests/test_sources.py::test_mercadolibre_map`.
+
+### Ubicación para Zonaprop y Argenprop
+
+Remax y Mudafy traen coordenadas en la página de listado (JSON embebido) y ya
+se capturan. Zonaprop y Argenprop no: solo están en la ficha de cada aviso, lo
+que implica cientos de requests extra por corrida contra un Cloudflare que ya
+corta en los listados. Antes de implementar: revisar el `robots.txt` para las
+fichas, medir cuántas se pueden pedir sin disparar la verificación, y evaluar
+alternativas (geocodificar la dirección de Argenprop, que sí está en la
+tarjeta). Son ~55% de los avisos activos y hoy aparecen como "sin ubicación"
+en el mapa.
+
 ## Cómo quiero que trabajes
 
 - Corré el código antes de decir que anda. Si no lo pudiste probar, decilo.
