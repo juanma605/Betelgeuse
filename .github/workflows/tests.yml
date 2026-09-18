@@ -1,0 +1,19 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      # Instala también requirements.txt (por el -r de adentro): de paso
+      # verifica que las dependencias declaradas se puedan instalar.
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q

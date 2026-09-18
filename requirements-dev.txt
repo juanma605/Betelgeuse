@@ -1,0 +1,7 @@
+-r requirements.txt
+
+pytest>=8.0
+
+# Para los tests de contrato de las fuentes: hacen correr los `_map()` contra
+# un fixture HTML sin levantar un navegador (ver tests/fake_dom.py).
+beautifulsoup4>=4.12

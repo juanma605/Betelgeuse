@@ -1,5 +1,7 @@
 # inmobot
 
+[![tests](https://github.com/juanma605/Betelgeuse/actions/workflows/tests.yml/badge.svg)](https://github.com/juanma605/Betelgeuse/actions/workflows/tests.yml)
+
 Scraping y análisis de avisos inmobiliarios, con todo parametrizado en `config.yaml`.
 
 No junta avisos: construye el mercado. Precio por m² por zona, detección de
@@ -62,6 +64,23 @@ el historial de precios es lo único que no podés conseguir en ningún portal.
 ```cron
 0 7 * * * cd /ruta/inmobot && /usr/bin/python3 -m inmobot scrape >> data/cron.log 2>&1
 ```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Corren sin red, sin credenciales y sin Playwright: unos segundos. No buscan
+cobertura, buscan las regresiones que duelen.
+
+El grupo que más vale es `tests/test_sources.py`: corre el `_map()` de cada
+fuente contra una tarjeta real del portal guardada en `tests/fixtures/`
+(anonimizada, igual que el demo). Cuando un portal renombra una clase CSS el
+scraper no explota — sigue corriendo y llena la base de nulls, que es la forma
+en que estos proyectos se rompen sin que nadie se entere. Ya pasó: Argenprop
+sacó el elemento con el barrio y el fixture lo destapó.
 
 ## Qué es configurable
 
