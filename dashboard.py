@@ -162,11 +162,11 @@ else:
         filtered[["id", "title", "zone", "url"]], left_on="listing_id", right_on="id"
     )
     drop_cols = ["title", "zone", "first_price", "current_price", "drops", "total_drop_pct", "url"]
-    st.dataframe(with_title[drop_cols].round(1), hide_index=True, use_container_width=True)
+    st.dataframe(with_title[drop_cols].round(1), hide_index=True, width="stretch")
 
 # --- tabla completa ------------------------------------------------------#
 st.subheader(f"Todos los avisos ({len(filtered)})")
-st.dataframe(filtered[cols].round(1), hide_index=True, use_container_width=True)
+st.dataframe(filtered[cols].round(1), hide_index=True, width="stretch")
 if filtered["area_estimada"].any():
     st.caption(
         f"{int(filtered['area_estimada'].sum())} de {len(filtered)} con `area_estimada`: "
@@ -174,7 +174,7 @@ if filtered["area_estimada"].any():
     )
 
 with st.expander("Ver todas las columnas (dato crudo)"):
-    st.dataframe(filtered, hide_index=True, use_container_width=True)
+    st.dataframe(filtered, hide_index=True, width="stretch")
 
 # --- mapa: los mismos avisos que la tabla, los que tienen ubicación ------#
 st.subheader("Mapa")
@@ -184,7 +184,7 @@ unlocated = len(filtered) - len(located)
 if located.empty:
     st.info(
         f"Ninguno de los {len(filtered)} avisos filtrados tiene ubicación. Hoy solo "
-        "Remax y Mudafy la publican en el listado; Zonaprop y Argenprop, no."
+        "Remax y Mudafy la publican en el listado."
     )
 else:
     def _m2(area, estimada):
@@ -243,5 +243,5 @@ else:
     if unlocated:
         st.caption(
             f"{unlocated} de {len(filtered)} avisos sin ubicación, no se muestran en el "
-            "mapa (Zonaprop y Argenprop no la publican en el listado)."
+            "mapa (solo Remax y Mudafy la publican en el listado)."
         )
