@@ -17,8 +17,8 @@ search:
   # usando fx_rates (abajo) o se descartan si no hay cotización.
   currency: USD
 
-  price_min: null
-  price_max: null
+  price_min: 10000
+  price_max: 600000
 
   # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
   filters:
