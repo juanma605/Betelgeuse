@@ -12,6 +12,8 @@ search:
     - "Recoleta"
     - "Almagro"
     - "Caballito"
+    - "Villa Urquiza"
+    - "Colegiales"
     - "Villa Crespo"
   # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
   # usando fx_rates (abajo) o se descartan si no hay cotización.
