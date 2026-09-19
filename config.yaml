@@ -39,34 +39,20 @@ search:
 
 sources:
   mercadolibre:
-    # Apagada: la búsqueda pública de ML quedó atrás de un gate de
-    # "certification_status: not_certified" a nivel de la app — no es un
-    # tema de token (probamos con uno válido y sigue dando 403 PolicyAgent),
-    # y conseguir la certificación no es viable ahora. Queda todo el código
-    # y el config listos por si en algún momento se resuelve del otro lado.
-    enabled: false
-    site: MLA                   # MLA=Argentina, MLU=Uruguay, MLC=Chile...
-    # ML dejó de modelar tipo de propiedad + operación como filtros de
-    # atributo (OPERATION/PROPERTY_TYPE ya no existen) y ahora los maneja
-    # como categoría anidada. Para cambiar de búsqueda, poné acá la
-    # categoría hoja que corresponda (verificado 2026-09 contra
-    # /categories/<id>, endpoint público que no requiere token):
-    #   Departamentos MLA1472 -> Alquiler MLA1473 | Alq.temp MLA50279 | Venta MLA1474
-    #   Casas         MLA1466 -> Alquiler MLA1467 | Alq.temp MLA50278 | Venta MLA1468
-    #   PH            MLA105179 -> Alquiler MLA105181 | Alq.temp MLA105180 | Venta MLA105182
-    category: MLA1474           # Departamentos en venta
-    max_results_per_zone: 1000  # tope duro de la API (offset máx 1000)
-    page_size: 50
-    rate_limit_seconds: 0.4
-    # ML cerró la búsqueda pública: hace falta un access_token vigente.
-    # Con `oauth` (client_id + client_secret de tu app) se pide uno nuevo
-    # por client_credentials en cada corrida — no vence, no hay que
-    # loguearse nunca ni guardar nada. `access_token` de abajo es solo el
-    # fallback manual si no completás `oauth`.
-    # oauth:
-    #  client_id: "env:ML_CLIENT_ID"
-    #  client_secret: "env:ML_CLIENT_SECRET"
-    access_token: "env:ML_ACCESS_TOKEN"
+    # Se lee el sitio público, no la API: la API cerró la búsqueda a apps no
+    # certificadas y la certificación no es alcanzable para este proyecto.
+    # Arma la URL como
+    #   /<property_slug>/<operation_slug>/<listing_slug>/<region_slug>/<zona>/
+    enabled: true
+    property_slug: departamentos          # departamentos | casas | ph
+    operation_slug: venta                 # venta | alquiler
+    # Sin este filtro la primera página son casi todos emprendimientos (ML
+    # los ordena arriba). Dejalo vacío ("") para no filtrar.
+    listing_slug: propiedades-individuales
+    region_slug: capital-federal
+    # El robots.txt prohíbe paginar (_Desde_): una página (~48 avisos) por
+    # zona. Una sola request por zona, espaciadas.
+    rate_limit_seconds: 8.0
 
   zonaprop:
     enabled: true

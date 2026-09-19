@@ -8,8 +8,6 @@ Acá se pone en rojo el día que pasa, contra un fixture que no toca la red.
 Ya sirvió una vez: ver `test_argenprop_map`.
 """
 
-import json
-
 from fake_dom import FIXTURES, card_from
 
 from inmobot import db
@@ -141,19 +139,36 @@ def test_mudafy_no_le_presta_coordenadas_a_un_aviso_que_no_las_tiene():
     assert "157315" not in coords
 
 
+def test_mercadolibre_descarta_publicidad_y_emprendimientos():
+    html = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+    items = mercadolibre.parse_listing_page(html, "Almagro")
+
+    # Un emprendimiento es un edificio con precio "Desde" y rangos de
+    # ambientes y m²: no hay un depto que comparar. La publicidad linkea a un
+    # tracker, no al aviso.
+    assert [i["id"] for i in items] == ["mercadolibre:MLA2000000002", "mercadolibre:MLA3000000003"]
+
+
 def test_mercadolibre_map():
-    """El fixture está armado a mano (la API responde 403 sin certificación),
-    así que fija el mapeo de `attributes`, no que ML siga contestando igual."""
-    raw = json.loads((FIXTURES / "mercadolibre_search.json").read_text(encoding="utf-8"))
-    source = mercadolibre.build({"site": "MLA", "category": "MLA1474"})
-    item = source._map(raw["results"][0], "Almagro")
+    html = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+    item = mercadolibre.parse_listing_page(html, "Almagro")[0]
 
     assert_esquema_comun(item)
-    assert item["id"] == "mercadolibre:MLA1234567890"
-    assert (item["price"], item["currency"]) == (145_000, "USD")
+    assert (item["price"], item["currency"]) == (145_000, "USD")  # ML escribe "US$"
     assert (item["neighborhood"], item["city"]) == ("Almagro", "Capital Federal")
-    assert (item["covered_area"], item["total_area"]) == (72.0, 78.0)
-    assert (item["rooms"], item["bedrooms"], item["bathrooms"]) == (3, 2, 2)
-    assert (item["maintenance_fee"], item["age_years"]) == (200_000.0, 25)
-    assert item["latitude"] == -34.606543
-    assert item["photo_count"] == 2
+    assert (item["rooms"], item["bathrooms"]) == (4, 2)
+    assert item["photo_count"] == 1
+    # Sin el "#polycard_client=..." de tracking.
+    assert item["url"] == (
+        "https://departamento.mercadolibre.com.ar/MLA-2000000002-venta-depto-4-ambientes-balcon-_JM"
+    )
+
+
+def test_mercadolibre_no_confunde_m2_totales_con_cubiertos():
+    html = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+    cubierto, sin_calificar = mercadolibre.parse_listing_page(html, "Almagro")
+
+    assert (cubierto["covered_area"], cubierto.get("total_area")) == (81, None)
+    # "70 m²" a secas no se toma como cubierto: va a total_area, así
+    # load_active lo marca como área estimada y no entra a las medianas.
+    assert (sin_calificar.get("covered_area"), sin_calificar["total_area"]) == (None, 70)

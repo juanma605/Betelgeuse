@@ -105,63 +105,46 @@ Todo lo que cambia entre búsquedas está en `config.yaml`, no en el código:
 | `alerts.email` | notificaciones por mail según score de oportunidad |
 
 Para cambiar de venta a alquiler, o de departamento a PH, tocás
-`sources.mercadolibre.category` (ver el mapeo de IDs en el comentario de
-`config.yaml`). Para venderle esto a un cliente, le cambiás el YAML y nada
-más.
+`property_slug` y `operation_slug` de cada fuente en `config.yaml`. Para
+venderle esto a un cliente, le cambiás el YAML y nada más.
 
 ## Estado actual
 
-- **Zonaprop, Argenprop, Mudafy, Remax**: implementados con Playwright, rate
-  limit de 4 s y el tope de páginas que fija el `robots.txt` de cada uno.
-  Zonaprop y Argenprop cortan con verificación de Cloudflare cada tanto: el
-  scraper la detecta, corta esa zona y avisa — no la esquiva.
-- **MercadoLibre**: implementado y apagado. La búsqueda quedó detrás de un gate
-  de certificación de app: con un `access_token` válido igual devuelve 403
-  (`PolicyAgent`). El código y el config quedan listos por si se resuelve del
-  otro lado.
+| Fuente | Cómo se lee | Tope por zona y corrida | m² cubiertos | Ubicación |
+|---|---|---|---|---|
+| Zonaprop | Playwright, 8 s entre páginas | 5 páginas (`robots.txt`) | no, solo totales | no |
+| Argenprop | Playwright, 8 s entre páginas | 3 páginas (`robots.txt`) | sí | no |
+| Mudafy | Playwright | ~25 avisos (no pagina) | no dice (se toma como total) | sí, ~100 m |
+| Remax | Playwright, 6 s entre páginas | 3 páginas (tope propio) | sí | sí |
+| MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | no |
+
+Zonaprop y Argenprop cortan con verificación de Cloudflare cada tanto: el
+scraper la detecta, corta esa zona sin dar de baja sus avisos, y avisa — no la
+esquiva.
+
+MercadoLibre se lee desde el sitio público y no desde la API: la API cerró la
+búsqueda a apps no certificadas (403 `PolicyAgent` aunque el token sea válido)
+y la certificación exige 30 usuarios activos y 300 publicaciones. Se buscan
+solo "propiedades individuales": sin ese filtro la primera página son casi
+todos emprendimientos.
+
+Las medianas de precio/m² salen solo de avisos con **m² cubiertos**. Los que
+publican solo totales se evalúan igual pero salen marcados con `*`: su precio
+por m² sale más bajo de lo real (un PH con patio, un balcón grande).
 
 Para agregar una fuente: creá `inmobot/sources/tufuente.py` con una clase que
 exponga `fetch(zone, search_cfg)` devolviendo dicts con las claves del esquema
-(mirá `mercadolibre._map`), y registrala en `SOURCE_BUILDERS`.
-
-## Cosas que tenés que verificar en la primera corrida real
-
-No pude probar contra la API en vivo, así que revisá esto:
-
-1. **Token de MercadoLibre (confirmado, bloqueante).** La API pública ya no
-   funciona sin auth: `/sites/MLA/search`, `/items/{id}` y prácticamente todo
-   menos `/categories/*` devuelven 403 sin token, incluso sin ningún filtro.
-   Hace falta generar un `access_token` vía OAuth (flujo `authorization_code`,
-   no hay `client_credentials`: hay que crear una app en
-   developers.mercadolibre.com.ar y loguearse una vez con una cuenta de ML) y
-   ponerlo en `sources.mercadolibre.access_token` (o exportar `ML_ACCESS_TOKEN`
-   y usar `"env:ML_ACCESS_TOKEN"`). El token expira a las 6 horas y el
-   `refresh_token` es de un solo uso — para un cron hace falta guardar y rotar
-   el refresh_token, no alcanza con pegar un token fijo.
-2. **IDs de filtros (ya corregido).** `OPERATION`/`PROPERTY_TYPE` no existen
-   más como filtros de atributo: ML pasó a modelar tipo de propiedad +
-   operación como categoría anidada (ej. Departamentos `MLA1472` → Venta
-   `MLA1474`). El config y `mercadolibre.py` ya usan `category` con la
-   categoría hoja — ver el mapeo en el comentario de `config.yaml`.
-3. **Nombres de atributos.** `ATTRIBUTE_MAP` en `mercadolibre.py` asume
-   `COVERED_AREA`, `ROOMS`, `MAINTENANCE_FEE`, etc. Si vienen vacíos, imprimí
-   `raw["attributes"]` de un aviso y ajustá el mapa.
-4. **Duplicados.** El test offline los infla porque los títulos sintéticos son
-   idénticos. Con títulos reales el filtro de similitud debería dejar pocos.
-   Si siguen dando muchos, subí `title_similarity` en `duplicate_candidates`.
+(mirá cualquiera de las de `inmobot/sources/`), registrala en
+`SOURCE_BUILDERS` y sumale un test de contrato con una tarjeta real en
+`tests/fixtures/`.
 
 ## Próximos pasos naturales
 
-1. **Streamlit encima de la base.** ~50 líneas y tenés filtros, tabla y mapa.
-   Es lo que convierte esto en algo mostrable a un cliente.
+1. **Ubicación para Zonaprop y Argenprop.** Son ~55% de los avisos y hoy no
+   aparecen en el mapa: la ubicación solo está en la ficha de cada aviso.
 2. **Regresión en vez de mediana.** `find_undervalued` compara contra la mediana
    de zona/ambientes. Con 2.000+ avisos, una regresión sobre área, ambientes,
-   antigüedad y barrio te va a dar un precio esperado mucho más fino.
-3. **Alertas por mail** (`inmobot/alerts.py`, ya implementado) leyendo
-   `alerts.email` y disparando cuando aparece algo sobre `min_score`. Solo
-   falta completar host/usuario/contraseña SMTP y poner `enabled: true`.
-4. **Geocoding** de los avisos sin lat/long, para análisis por distancia a
-   subte/parques en vez de por barrio.
+   antigüedad y barrio da un precio esperado mucho más fino.
 
 ## Escrúpulos
 

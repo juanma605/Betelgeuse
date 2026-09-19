@@ -41,7 +41,7 @@ def parse_price(text: str | None) -> tuple[float | None, str | None]:
     if not text:
         return None, None
     upper = text.upper()
-    if "USD" in upper or "U$S" in upper:
+    if "USD" in upper or "U$S" in upper or "US$" in upper:
         currency = "USD"
     elif "$" in text:
         currency = "ARS"

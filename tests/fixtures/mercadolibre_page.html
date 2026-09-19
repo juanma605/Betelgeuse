@@ -1,0 +1,90 @@
+<!-- MercadoLibre: página de búsqueda del sitio de inmuebles. Estructura real
+     (capturada 2026-09-19), contenido inventado. Cuatro tarjetas:
+     1. publicidad: linkea a un tracker, no al aviso -> se descarta
+     2. emprendimiento: pill EMPRENDIMIENTO y precio "Desde" -> se descarta
+     3. reventa con "m² cubiertos" -> covered_area
+     4. reventa con "m²" a secas (no visto todavía en el sitio; está para fijar
+        que un área sin calificar NO se toma como cubierta) -> total_area -->
+<ol class="ui-search-layout ui-search-layout--grid">
+  <li class="ui-search-layout__item">
+    <div class="andes-card poly-card poly-card--grid-card">
+      <div class="poly-card__portada"><img class="poly-component__picture" alt=""></div>
+      <div class="poly-card__content">
+        <h3 class="poly-component__title-wrapper">
+          <a class="poly-component__title" href="https://click1.mercadolibre.com.ar/brand_ads/clicks/MLA/count?a=abc">Edificio de ejemplo</a>
+        </h3>
+      </div>
+    </div>
+  </li>
+  <li class="ui-search-layout__item">
+    <div class="andes-card poly-card poly-card--grid-card">
+      <div class="poly-card__portada"><img class="poly-component__picture" alt=""></div>
+      <div class="poly-card__content">
+        <div class="poly-component__pill"><span class="poly-pill__pill">EMPRENDIMIENTO</span></div>
+        <span class="poly-component__headline">Departamento en venta</span>
+        <h3 class="poly-component__title-wrapper">
+          <a class="poly-component__title" href="https://departamento.mercadolibre.com.ar/MLA-1000000001-edificio-de-ejemplo-_JM">Edificio De Ejemplo Con Amenities</a>
+        </h3>
+        <div class="poly-component__price">
+          <span class="poly-price__prefix">Desde</span>
+          <div class="poly-price__current"><span class="andes-money-amount"><span class="andes-money-amount__currency-symbol">US$</span><span class="andes-money-amount__fraction">90.000</span></span></div>
+        </div>
+        <ul class="poly-attributes_list">
+          <li class="poly-attributes_list__item">1 a 4 ambs.</li>
+          <li class="poly-attributes_list__item">26 - 76 m² cubiertos</li>
+        </ul>
+        <span class="poly-component__location">Avenida Corrientes 3400, Almagro, Capital Federal</span>
+      </div>
+    </div>
+  </li>
+  <li class="ui-search-layout__item">
+    <div class="andes-card poly-card poly-card--grid-card poly-card--RES">
+      <div class="poly-card__portada">
+        <img class="poly-component__picture" alt="">
+        <span class="poly-component__float-highlight">PUBLICADO HOY</span>
+      </div>
+      <div class="poly-card__content">
+        <span class="poly-component__headline">Departamento en venta</span>
+        <h3 class="poly-component__title-wrapper">
+          <a class="poly-component__title" href="https://departamento.mercadolibre.com.ar/MLA-2000000002-venta-depto-4-ambientes-balcon-_JM#polycard_client=search-desktop&amp;position=3">Venta. Depto 4 Ambientes. Balcon</a>
+        </h3>
+        <div class="poly-component__price">
+          <div class="poly-price__current">
+            <span class="andes-money-amount poly-price__amount">
+              <span class="andes-money-amount__currency"><span class="andes-money-amount__currency-symbol">US$</span></span>
+              <span class="andes-money-amount__fraction">145.000</span>
+            </span>
+          </div>
+        </div>
+        <div class="poly-component__attributes-list">
+          <ul class="poly-attributes_list">
+            <li class="poly-attributes_list__item poly-attributes_list__separator">4 ambs.</li>
+            <li class="poly-attributes_list__item poly-attributes_list__separator">2 baños</li>
+            <li class="poly-attributes_list__item poly-attributes_list__separator">81 m² cubiertos</li>
+          </ul>
+        </div>
+        <span class="poly-component__location">Avenida Belgrano 3700, Almagro, Capital Federal</span>
+      </div>
+    </div>
+  </li>
+  <li class="ui-search-layout__item">
+    <div class="andes-card poly-card poly-card--grid-card poly-card--RES">
+      <div class="poly-card__portada"><img class="poly-component__picture" alt=""></div>
+      <div class="poly-card__content">
+        <span class="poly-component__headline">Departamento en venta</span>
+        <h3 class="poly-component__title-wrapper">
+          <a class="poly-component__title" href="https://departamento.mercadolibre.com.ar/MLA-3000000003-ph-2-ambientes-con-patio-_JM">Ph 2 Ambientes Con Patio</a>
+        </h3>
+        <div class="poly-component__price">
+          <div class="poly-price__current"><span class="andes-money-amount"><span class="andes-money-amount__currency-symbol">US$</span><span class="andes-money-amount__fraction">98.500</span></span></div>
+        </div>
+        <ul class="poly-attributes_list">
+          <li class="poly-attributes_list__item">2 ambs.</li>
+          <li class="poly-attributes_list__item">1 baño</li>
+          <li class="poly-attributes_list__item">70 m²</li>
+        </ul>
+        <span class="poly-component__location">Bulnes 900, Almagro, Capital Federal</span>
+      </div>
+    </div>
+  </li>
+</ol>

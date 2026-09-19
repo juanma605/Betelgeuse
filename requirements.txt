@@ -2,8 +2,10 @@
 pandas>=2.0
 PyYAML>=6.0
 
-# Fuente MercadoLibre (API HTTP).
+# Fuente MercadoLibre: su sitio viene armado del servidor, así que alcanza
+# con una request HTTP y parsear el HTML, sin navegador.
 httpx>=0.27
+beautifulsoup4>=4.12
 
 # Fuentes sin API (Zonaprop, Argenprop, Mudafy, Remax). Además del paquete
 # hay que bajar el navegador una vez: `playwright install chromium`.

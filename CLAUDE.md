@@ -35,7 +35,8 @@ inmobot/
   analyze.py             # precio/m², subvaluados, bajadas, stale, duplicados, score
   cli.py                 # scrape | analyze | export
   sources/
-    mercadolibre.py      # implementado (API pública, sin anti-bot)
+    mercadolibre.py      # sitio público por HTTP (la API cerró la búsqueda)
+    zonaprop.py, argenprop.py, mudafy.py, remax.py   # Playwright
 ```
 
 Principio de diseño: **nada hardcodeado**. Cambiar de "deptos en venta en
@@ -100,25 +101,19 @@ Leyendo `alerts.telegram` del config, disparando cuando aparece algo sobre
 
 ## Pendientes para más adelante
 
-### Arreglar la API de MercadoLibre
-
-La fuente está apagada (`sources.mercadolibre.enabled: false`). El token no es
-el problema: `/sites/MLA/search` devuelve 403 `PolicyAgent` incluso con un
-`access_token` válido, porque la app figura `certification_status:
-not_certified`. Hay que ver si existe un camino a la certificación (o un
-endpoint alternativo que no la exija) antes de tocar código. El mapeo de
-`_map()` ya está fijado por `tests/test_sources.py::test_mercadolibre_map`.
-
-### Ubicación para Zonaprop y Argenprop
+### Ubicación para Zonaprop, Argenprop y MercadoLibre
 
 Remax y Mudafy traen coordenadas en la página de listado (JSON embebido) y ya
-se capturan. Zonaprop y Argenprop no: solo están en la ficha de cada aviso, lo
-que implica cientos de requests extra por corrida contra un Cloudflare que ya
-corta en los listados. Antes de implementar: revisar el `robots.txt` para las
-fichas, medir cuántas se pueden pedir sin disparar la verificación, y evaluar
-alternativas (geocodificar la dirección de Argenprop, que sí está en la
-tarjeta). Son ~55% de los avisos activos y hoy aparecen como "sin ubicación"
-en el mapa.
+se capturan. Zonaprop, Argenprop y MercadoLibre no las traen en el listado.
+En Zonaprop y Argenprop están en la ficha de cada aviso, lo que implica
+cientos de requests extra por corrida contra un Cloudflare que ya corta en los
+listados; en ML las fichas viven en otro dominio y el `robots.txt` de
+`inmuebles.` bloquea `*/mla-`, así que hay que revisar el de
+`departamento.mercadolibre.com.ar`. Antes de implementar: revisar los
+`robots.txt` de las fichas, medir cuántas se pueden pedir sin disparar
+verificaciones, y evaluar alternativas (geocodificar la dirección, que Argenprop
+y ML sí publican en la tarjeta). Hoy son más de la mitad de los avisos activos
+y aparecen como "sin ubicación" en el mapa.
 
 ## Cómo quiero que trabajes
 
