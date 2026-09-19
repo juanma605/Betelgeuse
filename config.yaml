@@ -17,12 +17,12 @@ search:
   # usando fx_rates (abajo) o se descartan si no hay cotización.
   currency: USD
 
-  price_min: 40000
-  price_max: 180000
+  price_min: null
+  price_max: null
 
   # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
   filters:
-    covered_area_min: 30        # m² cubiertos
+    covered_area_min: 10        # m² cubiertos
     covered_area_max: null
     total_area_min: null
     rooms_min: null            # ambientes

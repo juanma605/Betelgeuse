@@ -5,3 +5,5 @@ data/*
 # afuera (ver README). Está anonimizado, no trae avisos de los portales.
 !data/demo.db
 .env
+.vscode/
+*settings.json
