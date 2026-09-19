@@ -14,11 +14,13 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
 
 from . import alerts, analyze, db, demo, normalize
+from .config import DEFAULTS
 from .config import load as load_config
 from .sources import argenprop, mercadolibre, mudafy, remax, zonaprop
 
@@ -44,6 +46,14 @@ def cmd_scrape(cfg) -> None:
     search_cfg = cfg["search"]
     dedup_cfg = cfg["dedup"]
     keep = cfg.get_path("storage.keep_snapshots", True)
+
+    enabled = [n for n, c in cfg["sources"].items() if c.get("enabled")]
+    log.info(
+        "=== Scrape: %d fuentes (%s) x %d zonas ===",
+        len(enabled), ", ".join(enabled), len(search_cfg["zones"]),
+    )
+    started = time.monotonic()
+    totals = {"new": 0, "updated": 0, "price_changes": 0}
 
     with db.connect(cfg.get_path("storage.path")) as conn:
         for name, conf in cfg["sources"].items():
@@ -89,6 +99,14 @@ def cmd_scrape(cfg) -> None:
                 name, stats["new"], stats["updated"], stats["price_changes"],
                 gone, rejected,
             )
+            for key in totals:
+                totals[key] += stats[key]
+
+    log.info(
+        "=== Terminado en %.0f min: %d nuevos, %d actualizados, %d cambios de precio. ===",
+        (time.monotonic() - started) / 60,
+        totals["new"], totals["updated"], totals["price_changes"],
+    )
 
 
 def cmd_analyze(cfg, export_dir: Path | None = None, use_demo: bool = False) -> None:
@@ -196,21 +214,59 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
-    logging.basicConfig(
-        level=cfg.get_path("logging.level", "INFO"),
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    try:
+        cfg = load_config(args.config)
+    except Exception:
+        # Un error de tipeo en el YAML no puede frenar el scrape de las 7 sin
+        # dejar rastro: se loguea con el archivo por defecto.
+        _setup_logging("INFO", DEFAULTS["logging"]["file"])
+        log.exception("No pude cargar %s", args.config)
+        sys.exit(1)
+    _setup_logging(cfg.get_path("logging.level", "INFO"), cfg.get_path("logging.file"))
 
-    if args.command == "scrape":
-        cmd_scrape(cfg)
-    elif args.command == "analyze":
-        cmd_analyze(cfg, use_demo=args.demo)
-    elif args.command == "demo-export":
-        cmd_demo_export(cfg, args.out or demo.DEMO_DB_PATH, args.limit)
-    else:
-        cmd_analyze(cfg, export_dir=Path(args.out or "data/reports"), use_demo=args.demo)
+    try:
+        if args.command == "scrape":
+            cmd_scrape(cfg)
+        elif args.command == "analyze":
+            cmd_analyze(cfg, use_demo=args.demo)
+        elif args.command == "demo-export":
+            cmd_demo_export(cfg, args.out or demo.DEMO_DB_PATH, args.limit)
+        else:
+            cmd_analyze(cfg, export_dir=Path(args.out or "data/reports"), use_demo=args.demo)
+    except Exception:
+        log.exception("'%s' se cortó por un error", args.command)
+        sys.exit(1)
+
+
+def _setup_logging(level: str, log_file: str | None) -> None:
+    """A la pantalla y al archivo a la vez.
+
+    Antes el .bat mandaba toda la salida al archivo y la ventana quedaba en
+    blanco aunque estuviera trabajando. Va a stdout y no a stderr (el default
+    de logging) para que se vea igual que un print.
+    """
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    file_error = None
+    if log_file:
+        # Si otra corrida tiene el archivo tomado (Windows lo bloquea), el
+        # scrape sigue igual, solo en pantalla: el log nunca lo puede frenar.
+        try:
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
+        except OSError as exc:
+            file_error = exc
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%d/%m %H:%M:%S",
+        handlers=handlers,
+        force=True,
+    )
+    # httpx loguea cada request en INFO: una línea por página, puro ruido.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    if file_error:
+        log.warning("No puedo escribir en %s (%s): esta corrida sale solo en pantalla.",
+                    log_file, file_error)
 
 
 if __name__ == "__main__":

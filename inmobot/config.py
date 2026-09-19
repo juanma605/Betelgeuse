@@ -32,7 +32,9 @@ DEFAULTS: dict[str, Any] = {
         "outlier_trim_pct": 5,
     },
     "alerts": {},
-    "logging": {"level": "INFO"},
+    # Además de la pantalla, todo queda en este archivo (se acumula). null
+    # para no escribir archivo.
+    "logging": {"level": "INFO", "file": "data/cron.log"},
 }
 
 
