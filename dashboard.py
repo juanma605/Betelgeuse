@@ -48,6 +48,10 @@ if df.empty:
 with st.sidebar:
     st.header("Filtros")
     zones = st.multiselect("Zona", sorted(df["zone"].dropna().unique()), default=None)
+    rooms = st.multiselect(
+        "Ambientes", sorted(int(r) for r in df["rooms"].dropna().unique()), default=None,
+        help="Los avisos que no publican la cantidad de ambientes quedan afuera al filtrar.",
+    )
     sources = st.multiselect("Fuente", sorted(df["source"].unique()), default=None)
     incl_off_plan = st.checkbox("Incluir pozo/emprendimientos", value=False)
     pmin, pmax = int(df["price_norm"].min()), int(df["price_norm"].max())
@@ -56,6 +60,8 @@ with st.sidebar:
 filtered = df.copy()
 if zones:
     filtered = filtered[filtered["zone"].isin(zones)]
+if rooms:
+    filtered = filtered[filtered["rooms"].isin(rooms)]
 if sources:
     filtered = filtered[filtered["source"].isin(sources)]
 if not incl_off_plan:
@@ -166,7 +172,11 @@ else:
 
 # --- tabla completa ------------------------------------------------------#
 st.subheader(f"Todos los avisos ({len(filtered)})")
-st.dataframe(filtered[cols].round(1), hide_index=True, width="stretch")
+st.caption("Ordenados por USD/m², de mayor a menor. Clic en el nombre de una columna para reordenar.")
+st.dataframe(
+    filtered.sort_values("price_per_m2", ascending=False)[cols].round(1),
+    hide_index=True, width="stretch",
+)
 if filtered["area_estimada"].any():
     st.caption(
         f"{int(filtered['area_estimada'].sum())} de {len(filtered)} con `area_estimada`: "
