@@ -128,6 +128,34 @@ _TABLE_CSS = """
 """
 
 
+def sortable_table(frame: pd.DataFrame, columns: list[str], key: str, default_col: str) -> None:
+    """Tabla que ordena Python y no el navegador, con los vacíos siempre al fondo.
+
+    El orden nativo de st.dataframe (clic en el encabezado) lo hace la grilla
+    del navegador invirtiendo la comparación para "mayor a menor": los vacíos
+    que quedan abajo en un sentido suben arriba en el otro, y no se puede
+    configurar. Acá el clic en un encabezado *selecciona* la columna (con la
+    selección activa, Streamlit apaga el orden nativo) y el orden lo hace
+    pandas con na_position="last", que deja los vacíos al final en los dos
+    sentidos. Solo importan los vacíos de la columna elegida.
+    """
+    picked = ((st.session_state.get(key) or {}).get("selection") or {}).get("columns") or []
+    sort_col = picked[0] if picked and picked[0] in frame.columns else default_col
+    direction = st.radio(
+        "Orden", ["Mayor a menor", "Menor a mayor"], horizontal=True,
+        key=f"{key}_orden", label_visibility="collapsed",
+    )
+    st.caption(
+        f"Ordenado por **{sort_col}**, {direction.lower()}. Clic en el nombre de una "
+        "columna para ordenar por esa; los datos vacíos quedan siempre al final."
+    )
+    shown = frame.sort_values(sort_col, ascending=direction == "Menor a mayor", na_position="last")
+    st.dataframe(
+        shown[columns].round(1), hide_index=True, width="stretch",
+        on_select="rerun", selection_mode="single-column", key=key,
+    )
+
+
 def _table_with_link(frame: "pd.DataFrame") -> None:
     """Tabla HTML con el título como link al aviso (st.dataframe no permite
     que una columna linkee usando el texto de otra). Sin URL queda el texto
@@ -168,15 +196,11 @@ else:
         filtered[["id", "title", "zone", "url"]], left_on="listing_id", right_on="id"
     )
     drop_cols = ["title", "zone", "first_price", "current_price", "drops", "total_drop_pct", "url"]
-    st.dataframe(with_title[drop_cols].round(1), hide_index=True, width="stretch")
+    sortable_table(with_title, drop_cols, key="tabla_bajas", default_col="total_drop_pct")
 
 # --- tabla completa ------------------------------------------------------#
 st.subheader(f"Todos los avisos ({len(filtered)})")
-st.caption("Ordenados por USD/m², de mayor a menor. Clic en el nombre de una columna para reordenar.")
-st.dataframe(
-    filtered.sort_values("price_per_m2", ascending=False)[cols].round(1),
-    hide_index=True, width="stretch",
-)
+sortable_table(filtered, cols, key="tabla_todos", default_col="price_per_m2")
 if filtered["area_estimada"].any():
     st.caption(
         f"{int(filtered['area_estimada'].sum())} de {len(filtered)} con `area_estimada`: "
@@ -184,7 +208,7 @@ if filtered["area_estimada"].any():
     )
 
 with st.expander("Ver todas las columnas (dato crudo)"):
-    st.dataframe(filtered, hide_index=True, width="stretch")
+    sortable_table(filtered, list(filtered.columns), key="tabla_crudo", default_col="price_per_m2")
 
 # --- mapa: los mismos avisos que la tabla, los que tienen ubicación ------#
 st.subheader("Mapa")

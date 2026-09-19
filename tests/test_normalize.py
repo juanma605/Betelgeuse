@@ -4,7 +4,7 @@ Son las que toca todo aviso de todas las fuentes, así que un cambio acá se
 propaga a la base entera sin hacer ruido.
 """
 
-from inmobot.normalize import fingerprint, passes_filters, to_currency
+from inmobot.normalize import drop_implausible_areas, fingerprint, passes_filters, to_currency
 
 FX = {"ARS_per_USD": 1500}
 
@@ -72,6 +72,21 @@ def test_passes_filters_rechaza_un_aviso_sin_fotos():
     ok, reason = passes_filters(listing(photo_count=0), SEARCH)
     assert ok is False
     assert reason == "sin fotos"
+
+
+# --- superficies imposibles ------------------------------------------- #
+
+def test_una_superficie_imposible_se_borra_pero_el_aviso_queda():
+    # Caso real: Remax tiene un 1½ ambiente cargado con 33.420 m² cubiertos
+    # y 38.090 totales. El precio y todo lo demás del aviso están bien.
+    aviso = {"price_norm": 110_000, "rooms": 1, "covered_area": 33_420, "total_area": 38_090}
+    drop_implausible_areas(aviso, 1000)
+    assert (aviso["covered_area"], aviso["total_area"]) == (None, None)
+    assert aviso["price_norm"] == 110_000
+
+    normal = {"covered_area": 80, "total_area": 95}
+    drop_implausible_areas(normal, 1000)
+    assert (normal["covered_area"], normal["total_area"]) == (80, 95)
 
 
 # --- fingerprint ------------------------------------------------------- #

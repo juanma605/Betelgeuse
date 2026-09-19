@@ -18,6 +18,7 @@ DEFAULTS: dict[str, Any] = {
         "currency": "USD",
         "price_min": None,
         "price_max": None,
+        "max_plausible_area_m2": None,
         "filters": {},
         "fx_rates": {"ARS_per_USD": None},
     },

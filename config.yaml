@@ -20,6 +20,11 @@ search:
   price_min: 10000
   price_max: 600000
 
+  # Superficie máxima creíble para lo que buscás. Por encima es un error de
+  # carga del portal (hubo un 1½ ambiente con "33420 m²"): se borra ese dato,
+  # pero el aviso se guarda igual. No es un filtro: el aviso no se descarta.
+  max_plausible_area_m2: 1000
+
   # Filtros sobre atributos del aviso. Dejá en null lo que no quieras filtrar.
   filters:
     covered_area_min: 10        # m² cubiertos

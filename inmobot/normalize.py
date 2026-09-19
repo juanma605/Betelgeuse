@@ -7,10 +7,13 @@ a un esquema común, convertimos monedas y aplicamos los filtros del config.
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import re
 import unicodedata
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Moneda
@@ -129,8 +132,30 @@ def passes_filters(item: dict, search_cfg: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def drop_implausible_areas(item: dict, max_area: float | None) -> None:
+    """Borra superficies que no pueden ser reales para la búsqueda.
+
+    Hay errores de carga en origen que ningún parser arregla: Remax tiene
+    guardado un 1½ ambiente con 33.420 m² cubiertos en su propia base, no es
+    un problema de cómo leemos el número. Un solo dato así mete un precio/m²
+    de 3 USD y arruina cualquier promedio que toque. Se borra el dato y no el
+    aviso, igual que si el portal no lo hubiera publicado.
+    """
+    if not max_area:
+        return
+    for field in ("covered_area", "total_area"):
+        value = item.get(field)
+        if value is not None and value > max_area:
+            log.warning(
+                "[%s] %s de %s m² descartado por imposible (máx %s): %s",
+                item.get("source"), field, value, max_area, item.get("url"),
+            )
+            item[field] = None
+
+
 def normalize(item: dict, search_cfg: dict, dedup_cfg: dict) -> dict:
     """Completa price_norm y fingerprint sobre un aviso ya mapeado."""
+    drop_implausible_areas(item, search_cfg.get("max_plausible_area_m2"))
     item["price_norm"] = to_currency(
         item.get("price"),
         item.get("currency"),
