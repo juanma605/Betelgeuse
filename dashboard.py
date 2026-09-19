@@ -153,6 +153,7 @@ def sortable_table(frame: pd.DataFrame, columns: list[str], key: str, default_co
     st.dataframe(
         shown[columns].round(1), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-column", key=key,
+        column_config={"url": st.column_config.LinkColumn("url")},
     )
 
 
