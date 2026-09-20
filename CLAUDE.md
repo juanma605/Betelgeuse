@@ -101,19 +101,18 @@ Leyendo `alerts.telegram` del config, disparando cuando aparece algo sobre
 
 ## Pendientes para más adelante
 
-### Ubicación para Zonaprop, Argenprop y MercadoLibre
+### Ubicación para Zonaprop
 
-Remax y Mudafy traen coordenadas en la página de listado (JSON embebido) y ya
-se capturan. Zonaprop, Argenprop y MercadoLibre no las traen en el listado.
-En Zonaprop y Argenprop están en la ficha de cada aviso, lo que implica
-cientos de requests extra por corrida contra un Cloudflare que ya corta en los
-listados; en ML las fichas viven en otro dominio y el `robots.txt` de
-`inmuebles.` bloquea `*/mla-`, así que hay que revisar el de
-`departamento.mercadolibre.com.ar`. Antes de implementar: revisar los
-`robots.txt` de las fichas, medir cuántas se pueden pedir sin disparar
-verificaciones, y evaluar alternativas (geocodificar la dirección, que Argenprop
-y ML sí publican en la tarjeta). Hoy son más de la mitad de los avisos activos
-y aparecen como "sin ubicación" en el mapa.
+Remax y Mudafy traen coordenadas en el listado; MercadoLibre y Argenprop traen
+la dirección y se geocodifica (`inmobot/geocode.py`). Zonaprop no trae
+ninguna de las dos: en la tarjeta solo está el barrio, y la dirección aparece
+en la ficha de cada aviso, lo que implica cientos de requests extra por corrida
+contra un Cloudflare que ya corta en los listados. Son 903 de los 1.947 avisos
+activos y son los únicos que quedan sin ubicación.
+
+Antes de implementar: revisar el `robots.txt` de las fichas y medir cuántas se
+pueden pedir sin disparar la verificación. Otra opción es buscar la dirección
+en el texto de la descripción, que a veces la menciona, pero eso es adivinar.
 
 ## Cómo quiero que trabajes
 
