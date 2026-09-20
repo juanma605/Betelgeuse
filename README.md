@@ -72,6 +72,33 @@ el historial de precios es lo único que no podés conseguir en ningún portal.
 0 7 * * * cd /ruta/inmobot && /usr/bin/python3 -m inmobot scrape >> data/cron.log 2>&1
 ```
 
+## Ubicación: subte, hospitales y comisarías
+
+El mapa muestra, además de los avisos, las estaciones de subte, los hospitales
+con guardia y las comisarías, y cada capa se prende o apaga aparte. Esa misma
+información entra en el score de oportunidad: el subte cerca suma, y tener un
+hospital con guardia o una comisaría a menos de 200 m resta (ambulancias,
+sirenas y movimiento a toda hora). Las distancias y los pesos se configuran en
+`analysis.location` y `analysis.weights`.
+
+Un aviso sin coordenadas —hoy, la mayoría— **no se puntúa con cero** en esa
+parte: se lo mide con las demás y ese peso se reparte. Si no, faltar un dato
+pesaría igual que estar mal ubicado.
+
+Los lugares están en `inmobot/lugares.json`, commiteado para que el análisis y
+el mapa funcionen sin red. Para actualizarlo:
+
+```bash
+python scripts/bajar_lugares.py
+```
+
+Fuentes: subtes y comisarías del [portal de datos abiertos de la Ciudad de
+Buenos Aires](https://data.buenosaires.gob.ar) (CC-BY 2.5 AR); hospitales con
+guardia de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL).
+Los hospitales no salen del dataset oficial porque publica las coordenadas en
+el sistema propio de la Ciudad (EPSG:9498), y convertirlas sin una librería de
+proyecciones es adivinar.
+
 ## Tests
 
 ```bash

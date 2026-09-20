@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
-from inmobot import analyze, config, db, demo
+from inmobot import analyze, config, db, demo, places
 
 st.set_page_config(page_title="inmobot", layout="wide")
 st.title("inmobot — mercado en vivo")
@@ -82,6 +82,21 @@ filtered = filtered.assign(
     area_estimada=filtered["area_source"] == "total",
 )
 
+# Distancia a lo que hace mejor o peor a una ubicación: se calcula acá para
+# poder ordenar la tabla por eso y mostrarlo en el mapa.
+_distancias = places.distancias(filtered)
+filtered = filtered.assign(
+    subte_m=_distancias["subte_m"].round(0),
+    evitar_m=_distancias["evitar_m"].round(0),
+)
+evitar_m = cfg.get_path("analysis.location.evitar_m", 200)
+
+REFERENCIAS = {
+    "subte": ("Subte", [40, 120, 220]),
+    "hospitales": ("Hospital con guardia", [235, 150, 35]),
+    "comisarias": ("Comisaría", [150, 85, 200]),
+}
+
 AREA_NOTE = (
     "m² totales, no cubiertos: el aviso no publica la superficie cubierta "
     "(Zonaprop y Mudafy no la muestran en el listado). Su precio/m² sale más bajo "
@@ -109,7 +124,7 @@ st.subheader("Destacados (vs. el promedio de su zona/ambientes)")
 comparable = filtered[filtered["n_comparables"] >= 2]
 cols = [
     "title", "zone", "rooms", "area", "area_estimada", "price_norm",
-    "price_per_m2", "vs_promedio_pct", "url",
+    "price_per_m2", "vs_promedio_pct", "subte_m", "url",
 ]
 linked_cols = [c for c in cols if c not in ("url", "area_estimada")]
 
@@ -222,6 +237,13 @@ if located.empty:
         "Remax y Mudafy la publican en el listado."
     )
 else:
+    col_a, col_b, col_c = st.columns(3)
+    mostrar = {
+        "subte": col_a.checkbox("Subtes", value=True),
+        "hospitales": col_b.checkbox("Hospitales con guardia", value=True),
+        "comisarias": col_c.checkbox("Comisarías", value=True),
+    }
+
     def _m2(area, estimada):
         return f"{area:.0f} m² totales* (no publica cubiertos)" if estimada else f"{area:.0f} m²"
 
@@ -236,6 +258,15 @@ else:
         "title": located["title"],
         "url": located["url"],
     })
+    points["tooltip"] = [
+        f"<b>{z}</b> · {r}<br/>{m}<br/>{p} · {pm}<br/>Subte a {s:,.0f} m"
+        f"{f'<br/>⚠ hospital o comisaría a {e:,.0f} m' if pd.notna(e) and e < evitar_m else ''}"
+        "<br/><i>clic para ver el link</i>"
+        for z, r, m, p, pm, s, e in zip(
+            points["zone"], points["rooms"], points["m2"], points["price"],
+            points["price_m2"], located["subte_m"], located["evitar_m"],
+        )
+    ]
 
     # compute_view da un zoom que abarca todos los puntos, pero centra en el
     # promedio: un cúmulo denso lo arrastra y deja afuera los de los bordes.
@@ -245,21 +276,40 @@ else:
     view.longitude = (points["longitude"].min() + points["longitude"].max()) / 2
     view.zoom = min(view.zoom, 15)
 
-    deck = pdk.Deck(
-        layers=[pdk.Layer(
+    capas = [pdk.Layer(
+        "ScatterplotLayer",
+        id="avisos",
+        data=points,
+        get_position=["longitude", "latitude"],
+        get_radius=35,
+        radius_min_pixels=4,
+        get_fill_color=[220, 70, 50, 190],
+        pickable=True,
+        auto_highlight=True,
+    )]
+    for clave, (etiqueta, color) in REFERENCIAS.items():
+        if not mostrar[clave]:
+            continue
+        lugares = pd.DataFrame(places.cargar()[clave])
+        lugares["tooltip"] = [f"<b>{etiqueta}</b><br/>{n}" for n in lugares["nombre"]]
+        capas.append(pdk.Layer(
             "ScatterplotLayer",
-            id="avisos",
-            data=points,
-            get_position=["longitude", "latitude"],
-            get_radius=35,
-            radius_min_pixels=4,
-            get_fill_color=[220, 70, 50, 190],
+            id=clave,
+            data=lugares,
+            get_position=["lon", "lat"],
+            get_radius=30,
+            radius_min_pixels=5,
+            get_fill_color=color + [210],
             pickable=True,
-            auto_highlight=True,
-        )],
+        ))
+
+    deck = pdk.Deck(
+        layers=capas,
         initial_view_state=view,
-        tooltip={"html": "<b>{zone}</b> · {rooms}<br/>{m2}<br/>{price} · {price_m2}"
-                         "<br/><i>clic para ver el link</i>"},
+        # Un solo campo "tooltip" ya armado por capa: si el HTML nombrara
+        # columnas (zone, rooms...), las capas de subte u hospitales las
+        # mostrarían vacías.
+        tooltip={"html": "{tooltip}"},
     )
     event = st.pydeck_chart(deck, on_select="rerun", selection_mode="single-object", key="mapa")
 
@@ -271,9 +321,23 @@ else:
         st.markdown(f"**{p['zone']} · {p['rooms']} · {p['m2']} · {p['price']}** — "
                     + (f"[ver aviso]({p['url']})" if p.get("url") else "sin link"))
 
+    def _punto(color, texto):
+        return (f'<span style="color:rgb({color[0]},{color[1]},{color[2]})">●</span> '
+                f'<span style="font-size:0.8rem">{texto}</span>')
+
+    st.markdown(
+        " &nbsp; ".join(
+            [_punto([220, 70, 50], f"avisos ({len(points)})")]
+            + [_punto(color, etiqueta) for clave, (etiqueta, color) in REFERENCIAS.items()
+               if mostrar[clave]]
+        ),
+        unsafe_allow_html=True,
+    )
     st.caption(
         "Ubicaciones aproximadas (~100 m): Mudafy las publica redondeadas"
         + (" y el demo redondea todas." if use_demo else ".")
+        + " Subtes y comisarías: Datos Abiertos GCBA (CC-BY 2.5 AR). Hospitales con"
+        " guardia: OpenStreetMap (ODbL)."
     )
     if unlocated:
         st.caption(
