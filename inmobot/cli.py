@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import alerts, analyze, db, demo, normalize
+from . import alerts, analyze, db, demo, geocode, normalize
 from .config import DEFAULTS
 from .config import load as load_config
 from .sources import argenprop, mercadolibre, mudafy, remax, zonaprop
@@ -101,6 +101,16 @@ def cmd_scrape(cfg) -> None:
             )
             for key in totals:
                 totals[key] += stats[key]
+
+        geo_cfg = cfg.get_path("geocoding", {}) or {}
+        if geo_cfg.get("enabled"):
+            ubic = geocode.completar_coordenadas(conn, geo_cfg)
+            log.info(
+                "[geocode] %d avisos ubicados por su dirección (%d direcciones nuevas "
+                "consultadas, %d sin resultado, %d avisos siguen sin ubicación)",
+                ubic["ubicados"], ubic["consultadas"], ubic["sin_resultado"],
+                ubic["pendientes"],
+            )
 
     log.info(
         "=== Terminado en %.0f min: %d nuevos, %d actualizados, %d cambios de precio. ===",

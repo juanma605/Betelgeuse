@@ -81,9 +81,18 @@ hospital con guardia o una comisaría a menos de 200 m resta (ambulancias,
 sirenas y movimiento a toda hora). Las distancias y los pesos se configuran en
 `analysis.location` y `analysis.weights`.
 
-Un aviso sin coordenadas —hoy, la mayoría— **no se puntúa con cero** en esa
-parte: se lo mide con las demás y ese peso se reparte. Si no, faltar un dato
-pesaría igual que estar mal ubicado.
+Un aviso sin coordenadas **no se puntúa con cero** en esa parte: se lo mide con
+las demás y ese peso se reparte. Si no, faltar un dato pesaría igual que estar
+mal ubicado.
+
+Solo Remax y Mudafy publican coordenadas. MercadoLibre y Argenprop publican la
+dirección, y esa dirección se convierte en un punto con el normalizador del
+GCBA después de cada scrape (`geocoding` en el config). Cada dirección se
+consulta una sola vez y queda cacheada en la tabla `geocode_cache`, así que el
+atraso se limpia en pocas corridas. Si el normalizador devuelve más de una
+opción, o un punto fuera de CABA, el aviso queda sin ubicación: mejor eso que
+ponerlo en la cuadra equivocada. Zonaprop no publica la dirección en el
+listado, solo el barrio.
 
 Los lugares están en `inmobot/lugares.json`, commiteado para que el análisis y
 el mapa funcionen sin red. Para actualizarlo:

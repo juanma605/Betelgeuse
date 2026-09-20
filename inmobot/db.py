@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS listings (
     zone              TEXT,
     neighborhood      TEXT,
     city              TEXT,
+    address           TEXT,                  -- calle y altura, para geocodificar
     latitude          REAL,
     longitude         REAL,
     price             REAL,                  -- en la moneda original
@@ -60,10 +61,20 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snap_listing ON price_snapshots(listing_id);
+
+-- Una dirección se geocodifica una sola vez, aunque la repitan varios avisos
+-- o aparezca en corridas siguientes. Guarda también las que no se pudieron
+-- resolver (lat/lon en NULL) para no volver a preguntar por ellas.
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    address   TEXT PRIMARY KEY,
+    lat       REAL,
+    lon       REAL,
+    tried_at  TEXT NOT NULL
+);
 """
 
 UPSERT_FIELDS = [
-    "id", "source", "source_id", "url", "title", "zone", "neighborhood", "city",
+    "id", "source", "source_id", "url", "title", "zone", "neighborhood", "city", "address",
     "latitude", "longitude", "price", "currency", "price_norm", "maintenance_fee",
     "covered_area", "total_area", "rooms", "bedrooms", "bathrooms", "age_years",
     "photo_count", "fingerprint", "raw",
@@ -82,10 +93,20 @@ def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA)
+        _agregar_columnas_nuevas(conn)
         yield conn
         conn.commit()
     finally:
         conn.close()
+
+
+def _agregar_columnas_nuevas(conn: sqlite3.Connection) -> None:
+    """CREATE TABLE IF NOT EXISTS no agrega columnas a una tabla que ya existe:
+    sin esto, una base vieja se rompe al insertar una columna nueva."""
+    existentes = {fila["name"] for fila in conn.execute("PRAGMA table_info(listings)")}
+    for columna, tipo in (("address", "TEXT"),):
+        if columna not in existentes:
+            conn.execute(f"ALTER TABLE listings ADD COLUMN {columna} {tipo}")
 
 
 def upsert_listings(

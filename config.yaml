@@ -110,6 +110,15 @@ sources:
     # solo un límite propio para no pasarnos en una sola corrida.
     max_pages: 3
 
+# MercadoLibre y Argenprop publican la dirección pero no las coordenadas.
+# Después de cada scrape, esas direcciones se convierten en un punto con el
+# normalizador del GCBA. Cada dirección se consulta una sola vez y queda
+# cacheada, así que el atraso se va limpiando en pocas corridas.
+geocoding:
+  enabled: true
+  max_per_run: 300        # direcciones nuevas por corrida (las cacheadas no cuentan)
+  rate_limit_seconds: 1.0
+
 storage:
   path: "data/listings.db"
   # Cada corrida guarda un snapshot de precio por aviso. Esto es lo que
@@ -141,7 +150,7 @@ analysis:
   weights:
     discount: 50       # cuánto está por debajo de la mediana de su grupo
     price_drops: 20    # cuánto bajó de precio desde que lo vemos
-    stale: 10          # hace cuánto está publicado
+    stale: 0          # hace cuánto está publicado
     location: 20       # qué tan bien ubicado está (ver abajo)
 
   # Ubicación, contra los datos de inmobot/lugares.json (subtes, hospitales

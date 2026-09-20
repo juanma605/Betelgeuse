@@ -113,7 +113,8 @@ def _map(card, zone: str) -> dict | None:
 
     source_id = f"MLA{match.group(1)}"
     price, currency = parse_price(_text(card, ".poly-price__current"))
-    neighborhood, city = _parse_location(_text(card, ".poly-component__location"))
+    ubicacion = _text(card, ".poly-component__location")
+    neighborhood, city = _parse_location(ubicacion)
 
     item: dict = {
         "id": f"mercadolibre:{source_id}",
@@ -126,6 +127,9 @@ def _map(card, zone: str) -> dict | None:
         "currency": currency,
         "neighborhood": neighborhood,
         "city": city,
+        # ML no publica coordenadas, pero sí la calle y la altura: alcanza
+        # para ubicarlo después (ver inmobot/geocode.py).
+        "address": _direccion(ubicacion),
         "photo_count": len(card.select(".poly-card__portada img")),
     }
 
@@ -159,6 +163,16 @@ def _is_project(card) -> bool:
 def _text(card, selector: str) -> str | None:
     node = card.select_one(selector)
     return node.get_text(" ", strip=True) if node else None
+
+
+def _direccion(texto: str | None) -> str | None:
+    """"Av Belgrano 3700, Almagro, Capital Federal" -> "Av Belgrano 3700".
+
+    Sin altura no sirve para ubicar el aviso: una calle puede tener treinta
+    cuadras.
+    """
+    primera = (texto or "").split(",")[0].strip()
+    return primera if re.search(r"\d", primera) else None
 
 
 def _parse_location(text: str | None) -> tuple[str | None, str | None]:

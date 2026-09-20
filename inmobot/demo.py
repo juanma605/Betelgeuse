@@ -75,6 +75,9 @@ def _anonymize(row, new_id: str) -> dict:
     item["source_id"] = new_id
     item["title"] = synthetic_title(row)
     item["raw"] = None
+    # La calle y la altura identifican el edificio: publicarlas dejaría sin
+    # sentido el redondeo de las coordenadas.
+    item["address"] = None
     for coord in ("latitude", "longitude"):
         if item[coord] is not None:
             item[coord] = round(item[coord], COORD_DECIMALS)
