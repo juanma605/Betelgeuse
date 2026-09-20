@@ -61,6 +61,17 @@ def test_zonaprop_map():
     # la descripción, recortado.
     assert item["title"].startswith("Departamento de tres ambientes")
     assert len(item["title"]) <= 121
+    # Zonaprop tampoco publica coordenadas, pero sí calle y altura.
+    assert item["address"] == "Gascon al 300"
+
+
+def test_zonaprop_no_confunde_el_titulo_con_la_direccion():
+    # Cuando el aviso no tiene dirección, Zonaprop mete el título en el mismo
+    # elemento. Un título es largo; una dirección, no.
+    assert zonaprop._direccion("Muñiz 778") == "Muñiz 778"
+    assert zonaprop._direccion(
+        "Departamento en Almagro en Venta I 2 Ambientes con Balcón, Vestidor y Amenities"
+    ) is None
 
 
 def test_argenprop_map():

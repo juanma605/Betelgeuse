@@ -108,6 +108,7 @@ class ZonapropSource:
         features_el = card.query_selector('[data-qa="POSTING_CARD_FEATURES"]')
         location_el = card.query_selector('[data-qa="POSTING_CARD_LOCATION"]')
         desc_el = card.query_selector('[data-qa="POSTING_CARD_DESCRIPTION"] a')
+        address_el = card.query_selector('[class*="location-address"]')
         has_photo = card.query_selector('[data-qa="POSTING_CARD_GALLERY"] img') is not None
 
         price, currency = parse_price(price_el.inner_text() if price_el else None)
@@ -132,6 +133,9 @@ class ZonapropSource:
             "currency": currency,
             "neighborhood": neighborhood,
             "city": city,
+            # Zonaprop no publica coordenadas, pero sí calle y altura: con eso
+            # se ubica después (ver inmobot/geocode.py).
+            "address": _direccion(address_el.inner_text() if address_el else None),
             "photo_count": 1 if has_photo else 0,
         }
         item.update(_parse_features(features_el.inner_text() if features_el else ""))
@@ -149,6 +153,21 @@ def _short_title(text: str | None, max_len: int = 120) -> str | None:
     if len(text) <= max_len:
         return text
     return text[:max_len].rsplit(" ", 1)[0] + "…"
+
+
+def _direccion(texto: str | None, max_largo: int = 60) -> str | None:
+    """Calle y altura de la tarjeta ("Gascon al 300", "Muñiz 778").
+
+    Cuando el aviso no publica dirección, Zonaprop usa ese mismo elemento para
+    meter el título entero ("Departamento en Almagro en Venta I 2 Ambientes
+    con Balcón, Vestidor y Amenities"). Un título es largo: con el tope de
+    caracteres alcanza para distinguirlos, y geocode.limpiar_direccion
+    descarta después lo que no tenga altura.
+    """
+    if not texto:
+        return None
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto if len(texto) <= max_largo else None
 
 
 def _parse_location(text: str | None) -> tuple[str | None, str | None]:
