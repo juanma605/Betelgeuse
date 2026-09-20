@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
+from . import places
+
 # Preventa/pozo: precio de m² estructuralmente más bajo que la reventa
 # (se paga en cuotas, se entrega a futuro). Mezclarlo en la misma mediana de
 # zona/ambientes infla artificialmente el "descuento" de find_undervalued —
@@ -292,8 +294,16 @@ def _with_spread(dupes: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+PESOS_DEFAULT = {"discount": 50, "price_drops": 20, "stale": 10, "location": 20}
+
+
 def opportunity_score(df: pd.DataFrame, drops: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Score 0-100 combinando descuento, bajas de precio y antigüedad del aviso.
+    """Score 0-100 combinando descuento, bajas de precio, antigüedad y ubicación.
+
+    Cada parte da un factor de 0 a 1 y los pesos salen del config. Un aviso
+    sin alguno de los datos —hoy, 3 de cada 4 no traen coordenadas— no se
+    puntúa con 0 en esa parte: se lo mide con las demás y el peso faltante se
+    reparte. Si no, la falta de un dato se leería como una mala nota.
 
     Los pesos son un punto de partida: movelos cuando veas resultados reales.
     """
@@ -304,20 +314,35 @@ def opportunity_score(df: pd.DataFrame, drops: pd.DataFrame, cfg: dict) -> pd.Da
     threshold = cfg.get("undervalued_threshold_pct", 15)
 
     discount = scored.get("discount_pct", pd.Series(0, index=scored.index)).fillna(0)
-    scored["score_discount"] = (discount / (threshold * 2)).clip(0, 1) * 60
-
     if not drops.empty:
         drop_map = drops.set_index("listing_id")["total_drop_pct"]
         scored["drop_pct"] = scored["id"].map(drop_map).fillna(0)
     else:
         scored["drop_pct"] = 0
-    scored["score_drop"] = (scored["drop_pct"] / 15).clip(0, 1) * 25
-
     first_seen = pd.to_datetime(scored["first_seen"], format="ISO8601", utc=True)
     days = (datetime.now(timezone.utc) - first_seen).dt.days
-    scored["score_stale"] = (days / cfg.get("stale_days", 60)).clip(0, 1) * 15
 
-    scored["score"] = (
-        scored["score_discount"] + scored["score_drop"] + scored["score_stale"]
-    ).round(1)
+    loc_cfg = cfg.get("location") or {}
+    distancias = places.distancias(scored)
+    scored["subte_m"] = distancias["subte_m"].round(0)
+    scored["evitar_m"] = distancias["evitar_m"].round(0)
+    ubicacion = places.puntaje_ubicacion(
+        distancias["subte_m"], distancias["evitar_m"],
+        loc_cfg.get("subte_m", 1000), loc_cfg.get("evitar_m", 200),
+    )
+
+    factores = pd.DataFrame({
+        "discount": (discount / (threshold * 2)).clip(0, 1),
+        "price_drops": (scored["drop_pct"] / 15).clip(0, 1),
+        "stale": (days / cfg.get("stale_days", 60)).clip(0, 1),
+        "location": pd.Series(ubicacion, index=scored.index),
+    })
+    pesos = pd.Series({**PESOS_DEFAULT, **(cfg.get("weights") or {})})[factores.columns]
+
+    aportado = factores.fillna(0).mul(pesos, axis=1)
+    disponible = factores.notna().mul(pesos, axis=1)
+    scored["score"] = (100 * aportado.sum(axis=1) / disponible.sum(axis=1)).round(1)
+    for parte in factores.columns:
+        scored[f"score_{parte}"] = aportado[parte].round(1)
+
     return scored.sort_values("score", ascending=False)

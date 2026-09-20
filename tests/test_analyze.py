@@ -135,6 +135,25 @@ def test_comparables_note_explica_por_que_no_hay_estadisticas():
 
 # --- price_drops ------------------------------------------------------- #
 
+def test_el_score_no_castiga_a_un_aviso_sin_coordenadas():
+    # 3 de cada 4 avisos no traen ubicación. Si a esos se les contara la
+    # parte de ubicación como cero, tener el dato faltante pesaría igual que
+    # estar mal ubicado. El peso se reparte entre las otras partes.
+    estacion = analyze.places.cargar()["subte"][0]
+    comun = {"discount_pct": 30, "first_seen": RECIENTE}
+    df = pd.DataFrame([
+        {**comun, "id": "sin_ubicacion", "latitude": None, "longitude": None},
+        {**comun, "id": "lejos_del_subte", "latitude": -34.681, "longitude": -58.468},
+        {**comun, "id": "sobre_el_subte", "latitude": estacion["lat"], "longitude": estacion["lon"]},
+    ])
+    scored = analyze.opportunity_score(df, pd.DataFrame(), CFG).set_index("id")
+
+    assert scored.loc["sobre_el_subte", "score"] > scored.loc["sin_ubicacion", "score"]
+    assert scored.loc["sin_ubicacion", "score"] > scored.loc["lejos_del_subte", "score"]
+    assert pd.isna(scored.loc["sin_ubicacion", "subte_m"])
+    assert scored.loc["sobre_el_subte", "subte_m"] == 0
+
+
 def snapshots(conn, filas):
     conn.executemany(
         "INSERT INTO price_snapshots (listing_id, seen_at, price, currency, price_norm) "
