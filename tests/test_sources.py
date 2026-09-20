@@ -126,6 +126,25 @@ def test_remax_map():
     assert item["photo_count"] == 3
 
 
+def test_remax_le_pega_la_provincia_al_barrio():
+    """Remax no responde 404 ante un slug que no reconoce: devuelve otra
+    búsqueda. `-en-palermo` es un landing residual de 1 aviso y
+    `-en-villa-urquiza` da 0, mientras los de verdad tienen 1466 y 452. La
+    base tuvo un solo aviso de Palermo durante semanas sin un solo error."""
+    source = remax.build({"zone_suffix": "-capital-federal"})
+
+    assert source._url("Palermo", 1) == (
+        "https://www.remax.com.ar/departamentos-en-venta-en-palermo-capital-federal"
+    )
+    # El sufijo va pegado al barrio, antes del `?page=` (0-indexado).
+    assert source._url("Villa Urquiza", 2) == (
+        "https://www.remax.com.ar/departamentos-en-venta-en-villa-urquiza-capital-federal?page=1"
+    )
+    # Sin configurar, la URL es la de antes: buscar fuera de CABA no necesita
+    # sufijo y esto no se lo impone.
+    assert remax.build({})._url("Palermo", 1).endswith("-en-palermo")
+
+
 def test_remax_saca_las_coordenadas_del_estado_de_la_pagina():
     state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
     coords = remax.coords_by_slug(state)

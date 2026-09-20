@@ -51,10 +51,23 @@ class RemaxSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = int(conf.get("max_pages", MAX_PAGES))
+        # Remax desambigua los barrios repetidos con la provincia pegada al
+        # slug. Ver _url().
+        self.zone_suffix = conf.get("zone_suffix", "")
         self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
-        base = f"{BASE}/{self.property_slug}-en-{self.operation_slug}-en-{slug(zone)}"
+        """URL de búsqueda de una zona.
+
+        El sufijo no es cosmético: sin él, `-en-palermo` es un landing
+        residual de 1 aviso (el barrio de verdad, con 1466, es
+        `-en-palermo-capital-federal`) y `-en-villa-urquiza` devuelve 0.
+        Remax no responde 404 ante un slug que no reconoce: devuelve otra
+        búsqueda, más chica o más grande, sin avisar. Por eso Palermo
+        estuvo aportando un solo aviso sin que nada se pusiera en rojo.
+        """
+        zona = slug(zone) + self.zone_suffix
+        base = f"{BASE}/{self.property_slug}-en-{self.operation_slug}-en-{zona}"
         # page 1 = URL base (sin parámetro); Remax pagina con ?page=N pero
         # 0-indexado, así que nuestra página 2 es su "?page=1".
         return base if page == 1 else f"{base}?page={page - 1}"

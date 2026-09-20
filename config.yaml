@@ -104,6 +104,11 @@ sources:
     property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
     rate_limit_seconds: 6.0        # cortaba 2 de 3 zonas con 4
+    # Sufijo que Remax le pega al barrio para desambiguarlo. Sin esto,
+    # "palermo" es un landing residual de 1 aviso y "villa-urquiza" da 0:
+    # el sitio no tira 404 con un slug que no reconoce, devuelve otra
+    # búsqueda sin avisar. Para buscar fuera de CABA, cambialo o vacialo.
+    zone_suffix: "-capital-federal"
     # A diferencia de las otras 3 fuentes, el robots.txt de Remax es muy
     # permisivo (solo banea a AhrefsBot y `?associate`) y sí soporta
     # paginación real vía `?page=N` — no hay tope duro del sitio, esto es
