@@ -94,7 +94,7 @@ evitar_m = cfg.get_path("analysis.location.evitar_m", 200)
 REFERENCIAS = {
     "subte": ("Subte", [40, 120, 220]),
     "hospitales": ("Hospital con guardia", [235, 150, 35]),
-    "comisarias": ("Comisaría", [150, 85, 200]),
+    "bomberos": ("Cuartel de bomberos", [150, 85, 200]),
 }
 
 AREA_NOTE = (
@@ -241,7 +241,7 @@ else:
     mostrar = {
         "subte": col_a.checkbox("Subtes", value=True),
         "hospitales": col_b.checkbox("Hospitales con guardia", value=True),
-        "comisarias": col_c.checkbox("Comisarías", value=True),
+        "bomberos": col_c.checkbox("Bomberos", value=True),
     }
 
     def _m2(area, estimada):
@@ -260,7 +260,7 @@ else:
     })
     points["tooltip"] = [
         f"<b>{z}</b> · {r}<br/>{m}<br/>{p} · {pm}<br/>Subte a {s:,.0f} m"
-        f"{f'<br/>⚠ hospital o comisaría a {e:,.0f} m' if pd.notna(e) and e < evitar_m else ''}"
+        f"{f'<br/>⚠ hospital o bomberos a {e:,.0f} m' if pd.notna(e) and e < evitar_m else ''}"
         "<br/><i>clic para ver el link</i>"
         for z, r, m, p, pm, s, e in zip(
             points["zone"], points["rooms"], points["m2"], points["price"],
@@ -336,7 +336,7 @@ else:
     st.caption(
         "Ubicaciones aproximadas (~100 m): Mudafy las publica redondeadas"
         + (" y el demo redondea todas." if use_demo else ".")
-        + " Subtes y comisarías: Datos Abiertos GCBA (CC-BY 2.5 AR). Hospitales con"
+        + " Subtes y bomberos: Datos Abiertos GCBA (CC-BY 2.5 AR). Hospitales con"
         " guardia: OpenStreetMap (ODbL)."
     )
     if unlocated:

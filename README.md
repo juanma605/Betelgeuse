@@ -72,27 +72,26 @@ el historial de precios es lo único que no podés conseguir en ningún portal.
 0 7 * * * cd /ruta/inmobot && /usr/bin/python3 -m inmobot scrape >> data/cron.log 2>&1
 ```
 
-## Ubicación: subte, hospitales y comisarías
+## Ubicación: subte, hospitales y bomberos
 
 El mapa muestra, además de los avisos, las estaciones de subte, los hospitales
-con guardia y las comisarías, y cada capa se prende o apaga aparte. Esa misma
-información entra en el score de oportunidad: el subte cerca suma, y tener un
-hospital con guardia o una comisaría a menos de 200 m resta (ambulancias,
-sirenas y movimiento a toda hora). Las distancias y los pesos se configuran en
-`analysis.location` y `analysis.weights`.
+con guardia y los cuarteles de bomberos, y cada capa se prende o apaga aparte.
+Esa misma información entra en el score de oportunidad: el subte cerca suma, y
+tener un hospital con guardia o un cuartel a menos de 200 m resta, porque son
+las dos fuentes de sirenas a cualquier hora. Las distancias y los pesos se
+configuran en `analysis.location` y `analysis.weights`.
 
 Un aviso sin coordenadas **no se puntúa con cero** en esa parte: se lo mide con
 las demás y ese peso se reparte. Si no, faltar un dato pesaría igual que estar
 mal ubicado.
 
-Solo Remax y Mudafy publican coordenadas. MercadoLibre y Argenprop publican la
-dirección, y esa dirección se convierte en un punto con el normalizador del
-GCBA después de cada scrape (`geocoding` en el config). Cada dirección se
-consulta una sola vez y queda cacheada en la tabla `geocode_cache`, así que el
-atraso se limpia en pocas corridas. Si el normalizador devuelve más de una
-opción, o un punto fuera de CABA, el aviso queda sin ubicación: mejor eso que
-ponerlo en la cuadra equivocada. Zonaprop no publica la dirección en el
-listado, solo el barrio.
+Remax y Mudafy publican coordenadas. Las otras tres publican la dirección, y
+esa dirección se convierte en un punto con el normalizador del GCBA después de
+cada scrape (`geocoding` en el config). Cada dirección se consulta una sola vez
+y queda cacheada en la tabla `geocode_cache`, así que el atraso se limpia en
+pocas corridas. Si el normalizador devuelve más de una opción, o un punto fuera
+de CABA, el aviso queda sin ubicación: mejor eso que ponerlo en la cuadra
+equivocada.
 
 Los lugares están en `inmobot/lugares.json`, commiteado para que el análisis y
 el mapa funcionen sin red. Para actualizarlo:
@@ -101,7 +100,7 @@ el mapa funcionen sin red. Para actualizarlo:
 python scripts/bajar_lugares.py
 ```
 
-Fuentes: subtes y comisarías del [portal de datos abiertos de la Ciudad de
+Fuentes: subtes y bomberos del [portal de datos abiertos de la Ciudad de
 Buenos Aires](https://data.buenosaires.gob.ar) (CC-BY 2.5 AR); hospitales con
 guardia de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL).
 Los hospitales no salen del dataset oficial porque publica las coordenadas en

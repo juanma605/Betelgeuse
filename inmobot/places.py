@@ -1,11 +1,12 @@
-"""Subtes, hospitales con guardia y comisarías, y qué tan cerca está cada aviso.
+"""Subtes, hospitales con guardia y cuarteles de bomberos, y qué tan cerca
+está cada aviso de cada cosa.
 
 Los datos salen de `lugares.json`, que se baja con `scripts/bajar_lugares.py`
 y está commiteado: el análisis y el mapa andan sin red.
 
 La idea: el subte cerca suma (es la diferencia entre 10 minutos y 40 hasta el
-centro) y estar pegado a un hospital con guardia o a una comisaría resta
-(ambulancias, sirenas y movimiento a toda hora).
+centro) y estar pegado a un hospital con guardia o a un cuartel de bomberos
+resta, porque son las dos fuentes de sirenas a cualquier hora.
 """
 
 from __future__ import annotations
@@ -69,10 +70,10 @@ def puntaje_ubicacion(
     """Factor 0-1 de qué tan bien ubicado está cada aviso. NaN si no se sabe.
 
     Dos partes: 70% cuánto falta caminar hasta el subte (lineal, 1 en la
-    puerta y 0 a `subte_m`) y 30% no tener un hospital con guardia o una
-    comisaría a menos de `evitar_m`. Separadas a propósito: si fuera una sola
-    cuenta, un aviso lejos de todo puntuaría igual que uno pegado a la guardia
-    de un hospital.
+    puerta y 0 a `subte_m`) y 30% no tener un hospital con guardia ni un
+    cuartel de bomberos a menos de `evitar_m`. Separadas a propósito: si fuera
+    una sola cuenta, un aviso lejos de todo puntuaría igual que uno pegado a
+    la guardia de un hospital.
     """
     cerca_del_subte = np.clip(1 - distancia_subte / subte_m, 0, 1)
     tranquilo = np.where(np.isnan(distancia_a_evitar), 1.0, distancia_a_evitar >= evitar_m)
@@ -80,14 +81,14 @@ def puntaje_ubicacion(
 
 
 def distancias(df, archivo: str | Path = ARCHIVO) -> dict[str, np.ndarray]:
-    """Metros al subte más cercano y al hospital/comisaría más cercano."""
+    """Metros al subte más cercano y al hospital o cuartel más cercano."""
     lugares = cargar(archivo)
     vacio = np.full(len(df), np.nan)
     # Sin columnas de coordenadas (ej. un DataFrame armado a mano en un test)
     # la respuesta es "no sé", igual que un aviso sin ubicación.
     lats = df["latitude"].to_numpy(dtype=float) if "latitude" in df else vacio
     lons = df["longitude"].to_numpy(dtype=float) if "longitude" in df else vacio
-    a_evitar = lugares["hospitales"] + lugares["comisarias"]
+    a_evitar = lugares["hospitales"] + lugares["bomberos"]
     return {
         "subte_m": distancia_al_mas_cercano(lats, lons, lugares["subte"]),
         "evitar_m": distancia_al_mas_cercano(lats, lons, a_evitar),

@@ -1,4 +1,4 @@
-"""Distancias a subtes, hospitales y comisarías, y el puntaje de ubicación."""
+"""Distancias a subtes, hospitales y bomberos, y el puntaje de ubicación."""
 
 import numpy as np
 import pytest
@@ -39,13 +39,13 @@ def test_puntaje_ubicacion_premia_el_subte_y_castiga_estar_pegado():
     assert puntos[1] == pytest.approx(0.65)   # a mitad de camino
     assert puntos[2] == pytest.approx(0.3)    # justo en el límite: solo tranquilidad
     assert puntos[3] == pytest.approx(0.3)    # más lejos no resta de más
-    # A 100 m del subte pero con una comisaría a 50 m: pierde la tranquilidad.
+    # A 100 m del subte pero con un cuartel a 50 m: pierde la tranquilidad.
     assert puntos[4] == pytest.approx(0.7 * 0.9)
 
 
 def test_lugares_json_tiene_las_tres_listas_dentro_de_caba():
     lugares = places.cargar()
-    for clave in ("subte", "hospitales", "comisarias"):
+    for clave in ("subte", "hospitales", "bomberos"):
         assert lugares[clave], f"{clave} vacío"
         for lugar in lugares[clave]:
             assert -34.71 < lugar["lat"] < -34.52, lugar

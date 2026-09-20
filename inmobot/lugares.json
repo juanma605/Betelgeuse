@@ -2,7 +2,7 @@
  "actualizado": "2026-09-20",
  "fuentes": {
   "subte": "Datos Abiertos GCBA (CC-BY-2.5-AR) — subte-estaciones",
-  "comisarias": "Datos Abiertos GCBA (CC-BY-2.5-AR) — comisarias-policia-ciudad",
+  "bomberos": "Datos Abiertos GCBA (CC-BY-2.5-AR) — cuarteles-destacamentos-bomberos",
   "hospitales": "OpenStreetMap (ODbL) — amenity=hospital + emergency=yes"
  },
  "subte": [
@@ -619,381 +619,146 @@
    "lon": -58.3944718
   }
  ],
- "comisarias": [
+ "bomberos": [
   {
-   "nombre": "Comisaría Vecinal12-A (edificio anexo)",
-   "lat": -34.550990102464745,
-   "lon": -58.49101503190442
+   "nombre": "Cuartel Central",
+   "lat": -34.613319815990785,
+   "lon": -58.388151022530536
   },
   {
-   "nombre": "Comisaría Vecinal 7-A",
-   "lat": -34.6310563022503,
-   "lon": -58.458307591055934
+   "nombre": "Destacamento Chacarita",
+   "lat": -34.592096855488606,
+   "lon": -58.4526996592821
   },
   {
-   "nombre": "Comisaría Vecinal 6-B",
-   "lat": -34.62038139407484,
-   "lon": -58.45322168166576
+   "nombre": "Destacamento G.E.R.  Saavedra",
+   "lat": -34.553318291583295,
+   "lon": -58.479216453235026
   },
   {
-   "nombre": "Comisaría Vecinal 5-A",
-   "lat": -34.604406411773645,
-   "lon": -58.415664541274616
+   "nombre": "Destacamento G.E.R. Caballito",
+   "lat": -34.630274300622325,
+   "lon": -58.435416174223086
   },
   {
-   "nombre": "Comisaría Vecinal 4-A",
-   "lat": -34.64194792387007,
-   "lon": -58.40283281867738
+   "nombre": "Destacamento Boca",
+   "lat": -34.63803701196811,
+   "lon": -58.35677132008628
   },
   {
-   "nombre": "Comisaría Vecinal 3-C",
-   "lat": -34.614970908070276,
-   "lon": -58.39367895264552
+   "nombre": "Destacamento Nueva Pompeya",
+   "lat": -34.658673283646486,
+   "lon": -58.416897167554446
   },
   {
-   "nombre": "Comisaría Vecinal 2-A",
-   "lat": -34.591136443178065,
-   "lon": -58.39236199141657
+   "nombre": "Destacamento Miserere",
+   "lat": -34.60806641286279,
+   "lon": -58.40838583548803
   },
   {
-   "nombre": "Comisaría Vecinal 15-A",
-   "lat": -34.590546220097984,
-   "lon": -58.451074877939185
+   "nombre": "Destacamento Palermo",
+   "lat": -34.57752636683331,
+   "lon": -58.435811167564765
   },
   {
-   "nombre": "Comisaría Vecinal 14-C",
-   "lat": -34.58126954919628,
-   "lon": -58.41366150581631
+   "nombre": "Destacamento Retiro",
+   "lat": -34.584197745704614,
+   "lon": -58.379981659837284
   },
   {
-   "nombre": "Comisaría Vecinal 11-A",
-   "lat": -34.61102295837465,
-   "lon": -58.47293895840077
+   "nombre": "Destacamento Vélez Sarsfield",
+   "lat": -34.64489397539736,
+   "lon": -58.48765309490748
   },
   {
-   "nombre": "Comisaría Vecinal 10-C",
-   "lat": -34.63918663321706,
-   "lon": -58.494099442703885
+   "nombre": "Destacamento Devoto",
+   "lat": -34.59827610132016,
+   "lon": -58.51553979511348
   },
   {
-   "nombre": "Comisaría Vecinal 1-A (edificio anexo I)",
-   "lat": -34.58429865140957,
-   "lon": -58.36958049572027
+   "nombre": "Destacamento Villa Urquiza",
+   "lat": -34.57902828421307,
+   "lon": -58.4898799173184
   },
   {
-   "nombre": "Comisaría Comunal 13",
-   "lat": -34.5731972491801,
-   "lon": -58.47578919089627
+   "nombre": "Estacion II Patricios",
+   "lat": -34.63647318072244,
+   "lon": -58.40301240153446
   },
   {
-   "nombre": "Comisaría Vecinal 3-B",
-   "lat": -34.62604808781184,
-   "lon": -58.40311991984066
+   "nombre": "Estacion III Barracas",
+   "lat": -34.63727909540629,
+   "lon": -58.367347991731926
   },
   {
-   "nombre": "Comisaría Vecinal 14-A",
-   "lat": -34.58776786078862,
-   "lon": -58.41610387118705
+   "nombre": "Estacion IV Recoleta",
+   "lat": -34.58998036964887,
+   "lon": -58.40244017609721
   },
   {
-   "nombre": "Comisaría Vecinal 1-E",
-   "lat": -34.623676756052674,
-   "lon": -58.36540954049011
+   "nombre": "Estacion IX Versailles",
+   "lat": -34.62951286297163,
+   "lon": -58.52393061614868
   },
   {
-   "nombre": "Comisaría Vecinal 4-C",
-   "lat": -34.63410104469192,
-   "lon": -58.36069524664056
+   "nombre": "Estacion V Comandante General Ariel Gastón Vázquez",
+   "lat": -34.56011033887419,
+   "lon": -58.45710675360257
   },
   {
-   "nombre": "Comisaría Vecinal 1-F",
-   "lat": -34.620236707869864,
-   "lon": -58.37408849620005
+   "nombre": "Estacion VI Comisario Mayor Maximiliano Cruz Firma Paz",
+   "lat": -34.59867886021807,
+   "lon": -58.440391598784274
   },
   {
-   "nombre": "Comisaría Vecinal 9-A",
-   "lat": -34.661924211825074,
-   "lon": -58.50118618349343
+   "nombre": "Estacion VII Flores",
+   "lat": -34.629245307688,
+   "lon": -58.4601128293571
   },
   {
-   "nombre": "Comisaría Comunal 7",
-   "lat": -34.6310563022503,
-   "lon": -58.458307591055934
+   "nombre": "Estacion VIII Nueva Chicago",
+   "lat": -34.66596463631436,
+   "lon": -58.4957220755932
   },
   {
-   "nombre": "Comisaria Vecinal 4-A (edificio anexo)",
-   "lat": -34.63640427680307,
-   "lon": -58.40086114781002
+   "nombre": "Estacion X Lugano",
+   "lat": -34.683703923585824,
+   "lon": -58.46969315306268
   },
   {
-   "nombre": "Comisaría Vecinal 15-C",
-   "lat": -34.59047448311428,
-   "lon": -58.45132792000443
+   "nombre": "Estacion XI Albariño",
+   "lat": -34.673008657465594,
+   "lon": -58.48627840654031
   },
   {
-   "nombre": "Comisaría Vecinal 9-B",
-   "lat": -34.63489634508499,
-   "lon": -58.52755284084778
+   "nombre": "Voluntarios de La Boca",
+   "lat": -34.63532155664932,
+   "lon": -58.36190165444717
   },
   {
-   "nombre": "Comisaría Comunal 12",
-   "lat": -34.550990102464745,
-   "lon": -58.49101503190442
+   "nombre": "Voluntarios de San Telmo",
+   "lat": -34.622494791151304,
+   "lon": -58.3698973688826
   },
   {
-   "nombre": "Comisaría Comunal 15",
-   "lat": -34.590546220097984,
-   "lon": -58.451074877939185
+   "nombre": "Voluntarios Villa Soldati",
+   "lat": -34.665071295221395,
+   "lon": -58.441110688942246
   },
   {
-   "nombre": "Comisaría Comunal 4",
-   "lat": -34.64194792387007,
-   "lon": -58.40283281867738
+   "nombre": "Voluntarios Vuelta de Rocha",
+   "lat": -34.64429500330075,
+   "lon": -58.36060836532132
   },
   {
-   "nombre": "Comisaría Comunal 10",
-   "lat": -34.63918663321706,
-   "lon": -58.494099442703885
+   "nombre": "Voluntarios de Nueva Pompeya y Barracas Sur",
+   "lat": -34.65126632525026,
+   "lon": -58.39685863225011
   },
   {
-   "nombre": "Comisaria Comunal 9",
-   "lat": -34.63487596001541,
-   "lon": -58.52751592037157
-  },
-  {
-   "nombre": "Comisaría Vecinal 8-B (edificio anexo I)",
-   "lat": -34.66041800036428,
-   "lon": -58.431835553573045
-  },
-  {
-   "nombre": "Comisaría Vecinal 1-C",
-   "lat": -34.62254103571925,
-   "lon": -58.39072173330163
-  },
-  {
-   "nombre": "Comisaría Vecinal 1-C (edificio anexo)",
-   "lat": -34.62292577857168,
-   "lon": -58.38572834729359
-  },
-  {
-   "nombre": "Comisaría Comunal 6",
-   "lat": -34.62038139407484,
-   "lon": -58.45322168166576
-  },
-  {
-   "nombre": "Comisaría Comunal 1",
-   "lat": -34.58429865140957,
-   "lon": -58.36958049572027
-  },
-  {
-   "nombre": "Comisaría Comunal 2",
-   "lat": -34.591136443178065,
-   "lon": -58.39236199141657
-  },
-  {
-   "nombre": "Comisaría Vecinal 1-D",
-   "lat": -34.60190533346012,
-   "lon": -58.37324885578176
-  },
-  {
-   "nombre": "Comisaría Vecinal 5-B",
-   "lat": -34.62863984277676,
-   "lon": -58.42492801152498
-  },
-  {
-   "nombre": "Comisaría Vecinal 6-A",
-   "lat": -34.608977891300256,
-   "lon": -58.43950273257121
-  },
-  {
-   "nombre": "Comisaría Vecinal 7-B",
-   "lat": -34.62677886954029,
-   "lon": -58.448088022379274
-  },
-  {
-   "nombre": "Comisaría Vecinal 2-B",
-   "lat": -34.5940780229934,
-   "lon": -58.406722080262135
-  },
-  {
-   "nombre": "Comisaría Vecinal 12-A",
-   "lat": -34.565145629242174,
-   "lon": -58.48252524827416
-  },
-  {
-   "nombre": "Comisaría Vecinal 15-B",
-   "lat": -34.59932010840561,
-   "lon": -58.44108560356735
-  },
-  {
-   "nombre": "Comisaría Vecinal 4-B",
-   "lat": -34.64479313618811,
-   "lon": -58.417157992360934
-  },
-  {
-   "nombre": "Comisaría Vecinal 8-B",
-   "lat": -34.67735534617036,
-   "lon": -58.454267122981484
-  },
-  {
-   "nombre": "Comisaría Vecinal 1-B",
-   "lat": -34.617160446937426,
-   "lon": -58.37858130354149
-  },
-  {
-   "nombre": "Comisaría Vecinal 9-C",
-   "lat": -34.64146107167717,
-   "lon": -58.476336219370545
-  },
-  {
-   "nombre": "Comisaría Vecinal 11-B",
-   "lat": -34.59831458730553,
-   "lon": -58.51560404631523
-  },
-  {
-   "nombre": "Comisaría Vecinal 12-B (edificio anexo I)",
-   "lat": -34.58971288961547,
-   "lon": -58.49936617057593
-  },
-  {
-   "nombre": "Comisaría Vecinal 8-A",
-   "lat": -34.67903291493464,
-   "lon": -58.474888158101265
-  },
-  {
-   "nombre": "Comisaría Vecinal 4-E",
-   "lat": -34.63822092897085,
-   "lon": -58.374858359482914
-  },
-  {
-   "nombre": "Comisaría Vecinal 4-D",
-   "lat": -34.6471488978436,
-   "lon": -58.37478987747005
-  },
-  {
-   "nombre": "Comisaría Vecinal 14-B",
-   "lat": -34.573257038631915,
-   "lon": -58.43904957050002
-  },
-  {
-   "nombre": "Comisaría Vecinal 13-C",
-   "lat": -34.56014527431079,
-   "lon": -58.45609733440254
-  },
-  {
-   "nombre": "Comisaría Vecinal 13-B",
-   "lat": -34.5512909001547,
-   "lon": -58.463543639788206
-  },
-  {
-   "nombre": "Comisaría Vecinal 12-B",
-   "lat": -34.57877677036396,
-   "lon": -58.49009267264174
-  },
-  {
-   "nombre": "Comisaría Vecinal 10-B",
-   "lat": -34.629562799536316,
-   "lon": -58.523901986041395
-  },
-  {
-   "nombre": "Comisaría Vecinal 1-A",
-   "lat": -34.594643162499665,
-   "lon": -58.38003952667834
-  },
-  {
-   "nombre": "Comisaría Vecinal 12-C",
-   "lat": -34.5731972491801,
-   "lon": -58.47578919089627
-  },
-  {
-   "nombre": "Comisaría Comunal 11",
-   "lat": -34.61102295837465,
-   "lon": -58.47293895840077
-  },
-  {
-   "nombre": "Comisaría Vecinal 10-A",
-   "lat": -34.62880577190448,
-   "lon": -58.48377879857752
-  },
-  {
-   "nombre": "Comisaría Vecinal 7-C",
-   "lat": -34.61611299874862,
-   "lon": -58.46482110249305
-  },
-  {
-   "nombre": "Comisaría Vecinal 10-C",
-   "lat": -34.639965860505626,
-   "lon": -58.50508483847855
-  },
-  {
-   "nombre": "Comisaría Vecinal 3-A (edificio anexo)",
-   "lat": -34.61705659478637,
-   "lon": -58.40928216463775
-  },
-  {
-   "nombre": "Comisaría Vecinal 13-A",
-   "lat": -34.55488835516263,
-   "lon": -58.444131059406836
-  },
-  {
-   "nombre": "Comisaría Vecinal 8-C",
-   "lat": -34.68309883885219,
-   "lon": -58.468969318089265
-  },
-  {
-   "nombre": "Comisaria Vecinal 1-A (edificio anexo II)",
-   "lat": -34.60192349060992,
-   "lon": -58.38890886319144
-  },
-  {
-   "nombre": "Comisaria Vecinal 14-A (edificio anexo)",
-   "lat": -34.59249343857936,
-   "lon": -58.42760256512527
-  },
-  {
-   "nombre": "Comisaria Comunal 8",
-   "lat": -34.67303346585819,
-   "lon": -58.455378659756576
-  },
-  {
-   "nombre": "Comisaría Vecinal 3-A",
-   "lat": -34.60329113019939,
-   "lon": -58.40407720431502
-  },
-  {
-   "nombre": "Comisaría Comunal 3",
-   "lat": -34.615008346785075,
-   "lon": -58.39367592639254
-  },
-  {
-   "nombre": "Comisaría Comunal 14",
-   "lat": -34.58126954919628,
-   "lon": -58.41366150581631
-  },
-  {
-   "nombre": "Comisaría Comunal 5",
-   "lat": -34.604406411773645,
-   "lon": -58.415664541274616
-  },
-  {
-   "nombre": "Comisaría Comunal 1 Norte",
-   "lat": -34.60339778867843,
-   "lon": -58.37272314184262
-  },
-  {
-   "nombre": "Comisaría Comunal 1 Sur",
-   "lat": -34.62026507730856,
-   "lon": -58.37400376134853
-  },
-  {
-   "nombre": "Comisaría Vecinal 3-C (anexo I)",
-   "lat": -34.60334522895158,
-   "lon": -58.394768079033724
-  },
-  {
-   "nombre": "Comisaría Vecinal 14-A (edificio anexo II)",
-   "lat": -34.58255196829385,
-   "lon": -58.420124506242104
+   "nombre": "Estación I Puerto Madero",
+   "lat": -34.618269883237026,
+   "lon": -58.355686082709866
   }
  ]
 }

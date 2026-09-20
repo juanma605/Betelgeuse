@@ -154,13 +154,14 @@ analysis:
     location: 20       # qué tan bien ubicado está (ver abajo)
 
   # Ubicación, contra los datos de inmobot/lugares.json (subtes, hospitales
-  # con guardia y comisarías). Actualizalos con scripts/bajar_lugares.py.
+  # con guardia y cuarteles de bomberos). Se actualizan con
+  # scripts/bajar_lugares.py.
   location:
     # A menos de esto del subte suma, y cuanto más cerca, más. 1000 m son
     # unos 12 minutos caminando.
     subte_m: 1000
-    # Un hospital con guardia o una comisaría más cerca que esto resta:
-    # ambulancias, sirenas y movimiento a toda hora.
+    # Un hospital con guardia o un cuartel de bomberos más cerca que esto
+    # resta: son las dos fuentes de sirenas a cualquier hora.
     evitar_m: 200
 
 alerts:
