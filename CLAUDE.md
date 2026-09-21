@@ -127,6 +127,19 @@ Hay dos redes ahora: `search.bbox` descarta lo que cae fuera del recuadro,
 y Remax corta la zona si los `geoLabel` no mencionan el barrio pedido. Las
 dos son redes, no reemplazan mirar el primer scrape de una zona nueva.
 
+### El dashboard no recarga lo que importa
+
+Streamlit recarga `dashboard.py` cuando cambia, pero no los módulos de
+`inmobot/` que ese archivo importa: quedan en memoria como estaban cuando
+arrancó el proceso. Si tocás algo adentro de `inmobot/`, avisame que hay que
+reiniciar el dashboard; si solo cambia `dashboard.py`, con refrescar alcanza.
+
+Ya pasó dos veces y las dos se vieron como un error que no existía:
+`KeyError: 'comisarias'` por una lista que ya no estaba, y
+`KeyError: 'alquiler_url'` por una columna recién agregada. El traceback
+apunta a código viejo, así que los números de línea no coinciden con el
+archivo — esa es la pista.
+
 ## Cómo quiero que trabajes
 
 - Corré el código antes de decir que anda. Si no lo pudiste probar, decilo.
