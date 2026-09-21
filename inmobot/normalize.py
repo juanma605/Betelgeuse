@@ -86,6 +86,26 @@ def fingerprint(item: dict, area_tolerance: float = 2, price_tolerance_pct: floa
 # Filtros
 # --------------------------------------------------------------------------- #
 
+# Recuadro de la búsqueda. Un aviso con coordenadas afuera no es un aviso
+# raro: es la señal de que el portal entendió otra cosa. Remax, con un slug
+# de zona que no reconoce, no devuelve 404 — devuelve otra búsqueda. Así
+# entraron 148 avisos de Allen, San Jerónimo y Mar del Plata buscando
+# "Cañitas".
+BBOX_DEFAULT = {
+    "lat_min": -34.71, "lat_max": -34.52,   # CABA
+    "lon_min": -58.54, "lon_max": -58.33,
+}
+
+
+def dentro_del_recuadro(lat: float | None, lon: float | None, bbox: dict | None = None) -> bool:
+    """Un aviso sin coordenadas cuenta como adentro: el filtro descarta lo
+    que está probadamente afuera, no lo que no sabemos ubicar."""
+    if lat is None or lon is None:
+        return True
+    b = bbox or BBOX_DEFAULT
+    return b["lat_min"] <= lat <= b["lat_max"] and b["lon_min"] <= lon <= b["lon_max"]
+
+
 # (clave del config, campo del aviso, comparador)
 _RULES = [
     ("covered_area_min", "covered_area", "min"),
@@ -128,6 +148,11 @@ def passes_filters(item: dict, search_cfg: dict) -> tuple[bool, str]:
 
     if filters.get("require_photos") and not (item.get("photo_count") or 0):
         return False, "sin fotos"
+
+    if not dentro_del_recuadro(
+        item.get("latitude"), item.get("longitude"), search_cfg.get("bbox")
+    ):
+        return False, "coordenadas fuera del recuadro de búsqueda"
 
     return True, ""
 

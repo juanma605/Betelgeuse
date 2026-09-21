@@ -121,3 +121,31 @@ def test_fingerprint_es_estable_entre_corridas():
     # duplicados detectados hasta hoy se pierden en silencio.
     item = {"neighborhood": "Almagro", "rooms": 2, "covered_area": 50, "price_norm": 115_000}
     assert fingerprint(item) == "2ed318b6f4ba8ac1"
+
+
+def test_descarta_avisos_con_coordenadas_fuera_del_recuadro():
+    """Remax, ante un slug de zona que no reconoce, no devuelve 404: devuelve
+    otra búsqueda. Buscando "Cañitas" entraron 148 avisos de Allen (Río
+    Negro), San Jerónimo (Santa Fe) y Mar del Plata, con precio y m²
+    perfectamente válidos. Lo único que los delata es dónde están."""
+    cfg = {"price_min": 10_000, "price_max": 600_000}
+    palermo = {"price_norm": 150_000, "latitude": -34.58, "longitude": -58.42}
+    allen = {"price_norm": 150_000, "latitude": -38.981, "longitude": -67.831}
+
+    assert passes_filters(palermo, cfg)[0]
+    pasa, motivo = passes_filters(allen, cfg)
+    assert not pasa and "recuadro" in motivo
+
+    # Sin coordenadas no se descarta nada: 976 de los 4478 activos no tienen,
+    # y el filtro descarta lo que está probadamente afuera, no lo dudoso.
+    assert passes_filters({"price_norm": 150_000}, cfg)[0]
+
+
+def test_el_recuadro_se_puede_mover_desde_el_config():
+    """Nada hardcodeado: buscar en Mar del Plata tiene que ser solo YAML."""
+    mar_del_plata = {"price_norm": 150_000, "latitude": -38.012, "longitude": -57.545}
+    cfg = {
+        "price_min": 10_000, "price_max": 600_000,
+        "bbox": {"lat_min": -38.15, "lat_max": -37.90, "lon_min": -57.65, "lon_max": -57.50},
+    }
+    assert passes_filters(mar_del_plata, cfg)[0]

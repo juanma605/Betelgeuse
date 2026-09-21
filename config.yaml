@@ -23,6 +23,18 @@ search:
   price_min: 10000
   price_max: 600000
 
+  # Recuadro geográfico de la búsqueda. Un aviso con coordenadas afuera se
+  # descarta: no es un aviso raro, es la señal de que el portal entendió
+  # otra cosa. Remax, ante un slug de zona que no reconoce, no devuelve 404
+  # sino otra búsqueda — buscando "Cañitas" entraron 148 avisos de Allen,
+  # San Jerónimo y Mar del Plata. Los avisos sin coordenadas pasan igual.
+  # Estos valores son CABA; para buscar en otro lado, cambialos.
+  bbox:
+    lat_min: -34.71
+    lat_max: -34.52
+    lon_min: -58.54
+    lon_max: -58.33
+
   # Superficie máxima creíble para lo que buscás. Por encima es un error de
   # carga del portal (hubo un 1½ ambiente con "33420 m²"): se borra ese dato,
   # pero el aviso se guarda igual. No es un filtro: el aviso no se descarta.

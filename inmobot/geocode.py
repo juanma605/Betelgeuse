@@ -22,14 +22,17 @@ from datetime import datetime, timezone
 
 import httpx
 
+from .normalize import BBOX_DEFAULT
+
 log = logging.getLogger(__name__)
 
 API = "https://servicios.usig.buenosaires.gob.ar/normalizar/"
 
-# Recuadro de CABA: si el geocodificador devuelve algo de afuera, es que
-# entendió otra cosa.
-LAT_MIN, LAT_MAX = -34.71, -34.52
-LON_MIN, LON_MAX = -58.54, -58.33
+# Recuadro de la búsqueda: si el geocodificador devuelve algo de afuera, es
+# que entendió otra cosa. Sale de normalize para que el scrape y el
+# geocodificador no discutan sobre dónde queda CABA.
+LAT_MIN, LAT_MAX = BBOX_DEFAULT["lat_min"], BBOX_DEFAULT["lat_max"]
+LON_MIN, LON_MAX = BBOX_DEFAULT["lon_min"], BBOX_DEFAULT["lon_max"]
 
 _CALLE_Y_ALTURA = re.compile(r"^\s*(.+?\s+\d{1,5})\s*$")
 # "Olazabal 2600 - Piso 2", "Zapata y Matienzo - Unidad 703"
