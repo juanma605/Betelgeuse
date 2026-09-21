@@ -147,11 +147,25 @@ venderle esto a un cliente, le cambiás el YAML y nada más.
 
 | Fuente | Cómo se lee | Tope por zona y corrida | m² cubiertos | Ubicación |
 |---|---|---|---|---|
-| Zonaprop | Playwright, 8 s entre páginas | 5 páginas (`robots.txt`) | no, solo totales | no |
-| Argenprop | Playwright, 8 s entre páginas | 3 páginas (`robots.txt`) | sí | no |
+| Zonaprop | Playwright, 8 s entre páginas | 5 páginas + 1 reordenada (`robots.txt`) | no, solo totales | sí, por dirección |
+| Argenprop | Playwright, 8 s entre páginas | 3 páginas + 1 reordenada (`robots.txt`) | sí | sí, por dirección |
 | Mudafy | Playwright | ~25 avisos (no pagina) | no dice (se toma como total) | sí, ~100 m |
-| Remax | Playwright, 6 s entre páginas | 3 páginas (tope propio) | sí | sí |
-| MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | no |
+| Remax | Playwright, 6 s entre páginas | 15 páginas (tope propio) | sí | sí |
+| MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | sí, por dirección |
+
+El tope de cada fuente sale de su `robots.txt`, no de lo que aguanta el
+sitio. Zonaprop y Argenprop prohíben paginar más allá de 5 y 3, y prohíben
+reordenar la búsqueda salvo por precio ascendente, que habilitan con un
+`Allow` puntual: esa pasada extra trae los más baratos de la zona, que es
+otra lista y no las mismas tarjetas dadas vuelta. MercadoLibre prohíbe las
+dos cosas — `Disallow: /*_Desde_` y `Disallow: *_PriceRange_` — así que
+queda en una página (~48 avisos) de las 5.793 que tiene en Palermo; la
+única forma de crecer ahí es agregar más barrios a `search.zones`.
+
+Remax es la excepción: su `robots.txt` son cuatro líneas y no impone ni
+tope de páginas ni `Crawl-delay`. Las 15 páginas son un límite nuestro
+(~360 avisos por zona, ~21 minutos de las 8 zonas). Es además la fuente más
+completa: publica m² cubiertos y coordenadas en el listado.
 
 Zonaprop y Argenprop cortan con verificación de Cloudflare cada tanto: el
 scraper la detecta, corta esa zona sin dar de baja sus avisos, y avisa — no la
