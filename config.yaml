@@ -77,6 +77,15 @@ sources:
     # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
     # Es un tope duro: aunque pongas más, el código lo recorta a 5.
     max_pages: 5
+    # Pasada extra sobre la misma búsqueda, reordenada. De todos los órdenes
+    # que ofrece el sitio, el robots.txt habilita uno solo
+    # (`Allow: *-orden-precio-ascendente.html`, `Disallow: *-orden-*`) y es
+    # el que más nos sirve: son los más baratos de la zona, que es donde
+    # miramos. Se pide solo la primera página de ese orden.
+    # Cuesta un request más por zona en el portal que ya corta por
+    # Cloudflare: si empiezan a aparecer más cortes, vaciá la lista.
+    extra_orders:
+      - "-orden-precio-ascendente"
 
   argenprop:
     enabled: true
@@ -86,6 +95,11 @@ sources:
     rate_limit_seconds: 8.0        # mismo motivo que Zonaprop (misma empresa, mismo anti-bot)
     # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
     max_pages: 3
+    # Mismo criterio que Zonaprop: `Allow: /*?orden-menorprecio` es el único
+    # orden habilitado. Acá además `Disallow: /*?*&*` impide combinar el
+    # orden con la paginación, así que de esta pasada sale una sola página.
+    extra_orders:
+      - "orden-menorprecio"
 
   mudafy:
     enabled: true
@@ -109,11 +123,15 @@ sources:
     # el sitio no tira 404 con un slug que no reconoce, devuelve otra
     # búsqueda sin avisar. Para buscar fuera de CABA, cambialo o vacialo.
     zone_suffix: "-capital-federal"
-    # A diferencia de las otras 3 fuentes, el robots.txt de Remax es muy
-    # permisivo (solo banea a AhrefsBot y `?associate`) y sí soporta
-    # paginación real vía `?page=N` — no hay tope duro del sitio, esto es
-    # solo un límite propio para no pasarnos en una sola corrida.
-    max_pages: 3
+    # A diferencia de las otras 3 fuentes, el robots.txt de Remax son cuatro
+    # líneas: solo banea a AhrefsBot y `?associate`. No hay tope de páginas
+    # ni Crawl-delay, y `?page=N` pagina de verdad (probado hasta la 30: 24
+    # avisos distintos cada una, cero repetidos). El tope es nuestro.
+    #
+    # 15 páginas = 360 avisos por zona, contra los 1466 que Remax tiene solo
+    # en Palermo. Subirlo más es legítimo pero alarga el scrape: cada página
+    # cuesta los 6 s de rate limit más lo que tarde en renderizar.
+    max_pages: 15
 
 # MercadoLibre y Argenprop publican la dirección pero no las coordenadas.
 # Después de cada scrape, esas direcciones se convierten en un punto con el
