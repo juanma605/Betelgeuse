@@ -126,6 +126,28 @@ def test_remax_map():
     assert item["photo_count"] == 3
 
 
+def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
+    """Zonaprop y Argenprop prohíben reordenar la búsqueda salvo por precio
+    ascendente, que habilitan con un Allow puntual. Estas URLs son las que
+    caen del lado permitido: si alguien agrega otro orden al config, que sea
+    a sabiendas y no porque el código lo arma solo."""
+    zp = zonaprop.build({"extra_orders": ["-orden-precio-ascendente"]})
+    assert zp._url("departamentos", "Palermo", 1, "-orden-precio-ascendente") == (
+        "https://www.zonaprop.com.ar/departamentos-venta-palermo-orden-precio-ascendente.html"
+    )
+
+    # Argenprop no permite combinar orden con paginación (`Disallow: /*?*&*`),
+    # así que el orden nunca lleva `&pagina-N` pegado.
+    ap = argenprop.build({"extra_orders": ["orden-menorprecio"]})
+    con_orden = ap._url("departamentos", "Palermo", 2, "orden-menorprecio")
+    assert con_orden == "https://www.argenprop.com/departamentos/venta/palermo?orden-menorprecio"
+    assert "&" not in con_orden
+
+    # Sin configurar, las URLs son las de siempre.
+    assert zonaprop.build({})._url("departamentos", "Palermo", 2).endswith("-pagina-2.html")
+    assert argenprop.build({})._url("departamentos", "Palermo", 2).endswith("?pagina-2")
+
+
 def test_remax_le_pega_la_provincia_al_barrio():
     """Remax no responde 404 ante un slug que no reconoce: devuelve otra
     búsqueda. `-en-palermo` es un landing residual de 1 aviso y

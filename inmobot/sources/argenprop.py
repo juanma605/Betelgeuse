@@ -43,10 +43,17 @@ class ArgenpropSource:
         self.operation_slug = conf.get("operation_slug", "venta")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.max_pages = min(int(conf.get("max_pages", MAX_PAGES)), MAX_PAGES)
+        # Reordenamientos extra, una sola página cada uno. El robots.txt
+        # habilita `Allow: /*?orden-menorprecio` y prohíbe el resto de los
+        # órdenes; y con `Disallow: /*?*&*` tampoco se puede combinar un
+        # orden con la paginación, así que de cada uno sale una página.
+        self.extra_orders = list(conf.get("extra_orders") or [])
         self.incomplete_zones: set[str] = set()
 
-    def _url(self, property_slug: str, zone: str, page: int) -> str:
+    def _url(self, property_slug: str, zone: str, page: int, order: str = "") -> str:
         url = f"{BASE}/{property_slug}/{self.operation_slug}/{slug(zone)}"
+        if order:
+            return url + f"?{order}"
         if page > 1:
             url += f"?pagina-{page}"
         return url
@@ -61,8 +68,18 @@ class ArgenpropSource:
                 yield from self._fetch_property_type(page_obj, property_slug, zone)
 
     def _fetch_property_type(self, page_obj, property_slug: str, zone: str) -> Iterator[dict]:
-        for page_num in range(1, self.max_pages + 1):
-            url = self._url(property_slug, zone, page_num)
+        yield from self._fetch_pages(page_obj, property_slug, zone, "", self.max_pages)
+        # Los más baratos primero: otra lista, no las mismas tarjetas dadas
+        # vuelta, y es donde miramos cuando buscamos subvaluados.
+        for order in self.extra_orders:
+            time.sleep(self.delay)
+            yield from self._fetch_pages(page_obj, property_slug, zone, order, 1)
+
+    def _fetch_pages(
+        self, page_obj, property_slug: str, zone: str, order: str, max_pages: int
+    ) -> Iterator[dict]:
+        for page_num in range(1, max_pages + 1):
+            url = self._url(property_slug, zone, page_num, order)
             try:
                 page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                 page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
@@ -90,7 +107,7 @@ class ArgenpropSource:
                 if item:
                     yield item
 
-            if page_num < self.max_pages:
+            if page_num < max_pages:
                 time.sleep(self.delay)
 
     # ---------------------------------------------------------------- #
