@@ -127,6 +127,34 @@ Hay dos redes ahora: `search.bbox` descarta lo que cae fuera del recuadro,
 y Remax corta la zona si los `geoLabel` no mencionan el barrio pedido. Las
 dos son redes, no reemplazan mirar el primer scrape de una zona nueva.
 
+### El alquiler estimado por edificio está mal en un tercio de los casos
+
+`alquiler_mes` y `rinde_anual_pct` (dashboard, y `yields`) salen de tomar el
+USD/m² al que se alquila el edificio y multiplicarlo por los m² del aviso de
+venta. Medido contra los alquileres reales de cada edificio: **77 de 213
+estimaciones (36%) caen muy lejos del rango que ese edificio realmente
+alquila**. Ejemplos:
+
+    Colegiales, 213 m²  ->  decimos 3.905   el edificio alquila 733 a 750
+    Almagro,    161 m²  ->  decimos 3.897   el edificio alquila 1.000 a 1.033
+
+La causa NO es que el m² de alquiler no sea lineal: se midió y lo es (14-15
+USD/m² parejo de 15 a 300 m²). El problema es **extrapolar fuera del rango
+observado**. Ese edificio de Colegiales solo publica alquileres de
+departamentos chicos; su USD/m² no dice nada sobre uno de 213 m², y con 1 a
+3 alquileres por edificio (la mediana es 2) eso pasa casi siempre.
+
+Salidas posibles, para cuando se retome:
+
+- Estimar solo cuando el metraje del aviso de venta cae dentro del rango de
+  metrajes que ese edificio alquila, y dejarlo vacío si no.
+- Mostrar el rango real (`733–750`) en vez de un número inventado.
+- Ajustar por tipología: emparejar contra alquileres de ambientes parecidos
+  en vez de escalar por m².
+
+Mientras tanto la columna queda, con la advertencia a la vista en el
+dashboard. Se decidió no darla de baja.
+
 ### El dashboard no recarga lo que importa
 
 Streamlit recarga `dashboard.py` cuando cambia, pero no los módulos de

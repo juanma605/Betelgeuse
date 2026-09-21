@@ -81,6 +81,12 @@ La comparación es **por m²** y no por tipología: casi nunca hay venta y
 alquiler de la misma cantidad de ambientes en el mismo edificio, así que un
 monoambiente en alquiler sirve para medir un 3 ambientes en venta.
 
+> **Esta parte todavía no es confiable.** El alquiler estimado sale de
+> escalar por m² lo que alquila el edificio, y medido contra los alquileres
+> reales, un 36% cae muy lejos de lo que ese edificio alquila de verdad: uno
+> que solo publica monoambientes no dice nada sobre un departamento de 200
+> m². El detalle y las salidas posibles están en `CLAUDE.md`.
+
 El dashboard trae las mismas dos columnas por aviso: `alquiler_mes` y
 `rinde_anual_pct`, vacías cuando no hay ningún alquiler de ese edificio. No
 son "el alquiler de ese departamento" —eso no existe, el aviso es de venta—

@@ -295,6 +295,15 @@ else:
 
 # --- tabla completa ------------------------------------------------------#
 st.subheader(f"Todos los avisos ({len(filtered)})")
+if filtered["alquiler_mes"].notna().any():
+    st.warning(
+        "**`alquiler_mes` y `rinde_anual_pct` no son confiables todavía.** Salen "
+        "de escalar por m² el alquiler del edificio, y medido contra los "
+        "alquileres reales, un 36% cae muy fuera de lo que ese edificio alquila "
+        "de verdad: un edificio que solo publica monoambientes no dice nada "
+        "sobre un departamento de 200 m². Abrí `alquiler_url` y comparalo antes "
+        "de usar el número."
+    )
 sortable_table(filtered, cols, key="tabla_todos", default_col="price_per_m2")
 if filtered["area_estimada"].any():
     st.caption(
