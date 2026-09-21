@@ -35,6 +35,11 @@ CARD_SELECTOR = ".card-remax"
 # avisos vendidos no se dan de baja nunca.
 SIN_RESULTADOS = "No hay propiedades que coincidan"
 
+# Cada cuántas páginas avisar que seguimos vivos. Una zona grande son 60
+# páginas y unos 12 minutos: sin esto el log queda mudo todo ese rato y
+# no hay forma de distinguir "paginando" de "colgado".
+PAGINAS_POR_AVISO = 10
+
 # Angular deja los resultados de la búsqueda serializados en este <script>
 # (transfer state) para no volver a pedirlos en el cliente. Ahí viene la
 # ubicación de cada aviso, que la tarjeta no muestra.
@@ -81,6 +86,7 @@ class RemaxSource:
     # ---------------------------------------------------------------- #
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        traidos = 0
         with browser_page() as page_obj:
             for page_num in range(1, self.max_pages + 1):
                 url = self._url(zone, page_num)
@@ -119,10 +125,17 @@ class RemaxSource:
                     )
                     return
 
+                if page_num % PAGINAS_POR_AVISO == 0:
+                    log.info(
+                        "[remax] %s: %d páginas, %d avisos y sigo...",
+                        zone, page_num, traidos,
+                    )
+
                 coords = coords_by_slug(state)
                 for card in cards:
                     item = self._map(card, zone)
                     if item:
+                        traidos += 1
                         lat_lon = coords.get(item["source_id"])
                         if lat_lon:
                             item["latitude"], item["longitude"] = lat_lon
