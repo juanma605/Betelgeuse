@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from contextlib import contextmanager
 from typing import Iterator
 
 from ..normalize import slug
@@ -53,6 +54,11 @@ class ZonapropSource:
         # ese es el único que nos habilitan, y lo pedimos solo en su
         # primera página, que es lo que el Allow cubre al pie de la letra.
         self.extra_orders = list(conf.get("extra_orders") or [])
+        # Cloudflare marca la sesión, no la IP: reusando la misma pestaña
+        # corta en la 2da navegación, y abriendo una limpia por página
+        # las cinco entran. No se resuelve ni se falsifica nada — se
+        # evita que el challenge se dispare. Ver README.
+        self.new_session_per_page = bool(conf.get("new_session_per_page", True))
         # Zonas donde el fetch se cortó antes de terminar (bloqueo anti-bot,
         # error de red) — el caller no debe dar de baja avisos ahí solo
         # porque no aparecieron en esta corrida incompleta.
@@ -67,11 +73,20 @@ class ZonapropSource:
     # ---------------------------------------------------------------- #
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
-        with browser_page() as page_obj:
+        with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
                 if i > 0:
                     time.sleep(self.delay)
-                yield from self._fetch_property_type(page_obj, property_slug, zone)
+                yield from self._fetch_property_type(compartida, property_slug, zone)
+
+    @contextmanager
+    def _sesion(self):
+        """Una pestaña para toda la zona, o ninguna si cada página abre la suya."""
+        if self.new_session_per_page:
+            yield None
+        else:
+            with browser_page() as page_obj:
+                yield page_obj
 
     def _fetch_property_type(self, page_obj, property_slug: str, zone: str) -> Iterator[dict]:
         yield from self._fetch_pages(page_obj, property_slug, zone, "", self.max_pages)
@@ -86,35 +101,50 @@ class ZonapropSource:
     ) -> Iterator[dict]:
         for page_num in range(1, max_pages + 1):
             url = self._url(property_slug, zone, page_num, order)
-            try:
-                page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
-            except Exception as exc:
-                self.incomplete_zones.add(zone)
-                if is_bot_challenge(page_obj):
-                    log.warning(
-                        "[zonaprop] Cloudflare pidió verificación en %s/%s (pág %d) — "
-                        "corto acá, no la esquivamos. Quedaron %d página(s).",
-                        property_slug, zone, page_num, page_num - 1,
+            if self.new_session_per_page:
+                # La pestaña se cierra antes de ceder los avisos: si el
+                # consumidor tarda, no dejamos un Chromium abierto de gusto.
+                with browser_page() as propia:
+                    avisos, seguir = self._traer_pagina(
+                        propia, url, property_slug, zone, page_num
                     )
-                else:
-                    log.info(
-                        "[zonaprop] corto en %s/%s (pág %d): %s",
-                        property_slug, zone, page_num, exc,
-                    )
+            else:
+                avisos, seguir = self._traer_pagina(
+                    page_obj, url, property_slug, zone, page_num
+                )
+
+            yield from avisos
+            if not seguir:
                 return
-
-            cards = page_obj.query_selector_all(CARD_SELECTOR)
-            if not cards:
-                return
-
-            for card in cards:
-                item = self._map(card, zone)
-                if item:
-                    yield item
-
             if page_num < max_pages:
                 time.sleep(self.delay)
+
+    def _traer_pagina(
+        self, page_obj, url: str, property_slug: str, zone: str, page_num: int
+    ) -> tuple[list[dict], bool]:
+        """Los avisos de una página, y si tiene sentido pedir la siguiente."""
+        try:
+            page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
+        except Exception as exc:
+            self.incomplete_zones.add(zone)
+            if is_bot_challenge(page_obj):
+                log.warning(
+                    "[zonaprop] Cloudflare pidió verificación en %s/%s (pág %d) — "
+                    "corto acá, no la esquivamos. Quedaron %d página(s).",
+                    property_slug, zone, page_num, page_num - 1,
+                )
+            else:
+                log.info(
+                    "[zonaprop] corto en %s/%s (pág %d): %s",
+                    property_slug, zone, page_num, exc,
+                )
+            return [], False
+
+        cards = page_obj.query_selector_all(CARD_SELECTOR)
+        if not cards:
+            return [], False
+        return [i for i in (self._map(c, zone) for c in cards) if i], True
 
     # ---------------------------------------------------------------- #
 

@@ -167,9 +167,16 @@ tope de páginas ni `Crawl-delay`. Las 15 páginas son un límite nuestro
 (~360 avisos por zona, ~21 minutos de las 8 zonas). Es además la fuente más
 completa: publica m² cubiertos y coordenadas en el listado.
 
-Zonaprop y Argenprop cortan con verificación de Cloudflare cada tanto: el
-scraper la detecta, corta esa zona sin dar de baja sus avisos, y avisa — no la
-esquiva.
+Zonaprop y Argenprop cortan con verificación de Cloudflare: el scraper la
+detecta, corta esa zona sin dar de baja sus avisos, y avisa — no la resuelve
+ni la falsifica.
+
+Lo que sí hace es no dispararla: Cloudflare marca la **sesión**, no la IP, y
+reusando la misma pestaña cortaba en la segunda navegación, dejándonos con 1
+de las 5 páginas que el `robots.txt` autoriza. Abriendo una pestaña limpia
+por página entran las cinco — en Palermo, 25 avisos pasan a 111. El rate
+limit y el tope de páginas son los mismos; lo único que cambia es que no
+arrastramos la sesión anterior. Se apaga con `new_session_per_page: false`.
 
 MercadoLibre se lee desde el sitio público y no desde la API: la API cerró la
 búsqueda a apps no certificadas (403 `PolicyAgent` aunque el token sea válido)
