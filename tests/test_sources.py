@@ -142,13 +142,13 @@ def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     # Argenprop no permite combinar orden con paginación (`Disallow: /*?*&*`),
     # así que el orden nunca lleva `&pagina-N` pegado.
     ap = argenprop.build({"extra_orders": ["orden-menorprecio"]})
-    con_orden = ap._url("departamentos", "Palermo", 2, "orden-menorprecio")
+    con_orden = ap._url("/departamentos/venta/palermo", 2, "orden-menorprecio")
     assert con_orden == "https://www.argenprop.com/departamentos/venta/palermo?orden-menorprecio"
     assert "&" not in con_orden
 
     # Sin configurar, las URLs son las de siempre.
     assert zonaprop.build({})._url("departamentos", "Palermo", 2).endswith("-pagina-2.html")
-    assert argenprop.build({})._url("departamentos", "Palermo", 2).endswith("?pagina-2")
+    assert argenprop.build({})._url("/departamentos/venta/palermo", 2).endswith("?pagina-2")
 
 
 

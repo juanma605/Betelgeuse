@@ -124,6 +124,46 @@ scraper no explota — sigue corriendo y llena la base de nulls, que es la forma
 en que estos proyectos se rompen sin que nadie se entere. Ya pasó: Argenprop
 sacó el elemento con el barrio y el fixture lo destapó.
 
+## El sitemap como fuente de búsquedas
+
+Armando la URL a mano solo se llega a `/departamentos/venta/palermo`, y como
+el `robots.txt` de Argenprop corta en la página 3, de ahí salen 60 avisos de
+los ~10.000 que el portal tiene en Palermo.
+
+Pero el mismo `robots.txt` declara sus sitemaps, y el de listados de venta en
+CABA trae 859 URLs: el portal indexa también `palermo-chico`,
+`palermo-hollywood`, `palermo-soho`, `palermo-nuevo` y `palermo-viejo`, más
+las variantes por tipo (`duplex`, `loft`) y por tamaño (`monoambiente`). Cada
+una es otra búsqueda, con sus propias 3 páginas.
+
+No es una vuelta astuta: un sitemap es la lista de URLs que el sitio pide que
+se crawleen, publicada al lado de sus `Disallow`. El tope de páginas se sigue
+respetando en cada una.
+
+El solapamiento entre sub-barrios es bajo — Palermo Hollywood aportó 52
+avisos nuevos sobre 60 — porque cada búsqueda es una ventana distinta sobre
+el mismo inventario grande.
+
+Las rutas se agrupan bajo la zona del config que les corresponde, y se la
+queda la que matchea más específico: `belgrano-r` es de "Belgrano R" y no de
+"Belgrano", porque si no sus avisos quedarían archivados en el barrio
+equivocado y contaminarían las medianas de los dos.
+
+Pedirlas todas de una no funciona: las 18 de Palermo son 54 páginas
+seguidas y Cloudflare corta mucho antes — probado, pasaron 8. Así que se
+rotan con `max_searches_per_zone`: la búsqueda del barrio entero va siempre y
+el resto se reparte entre corridas, eligiendo el tramo por el día del año.
+En unos días se recorren todas igual, sin castigar al portal. Con el cron
+diario, las 18 de Palermo se cubren en cuatro días.
+
+Se configura con `sources.argenprop.sitemap`. El nombre lleva la operación y
+la región, así que para alquiler o para GBA hay que cambiarlo; con `null` se
+vuelve a una sola búsqueda por zona. Si el sitemap no responde, el scrape
+sigue con esa búsqueda única en vez de cortar.
+
+Zonaprop también declara sitemaps, pero los sirve con 403 por HTTP directo:
+habría que pedirlos con Playwright, y queda pendiente.
+
 ## Lo que no es una oferta
 
 Ordenar la base por precio/m² ascendente debería mostrar las oportunidades.

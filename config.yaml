@@ -131,6 +131,25 @@ sources:
     rate_limit_seconds: 8.0        # mismo motivo que Zonaprop (misma empresa, mismo anti-bot)
     # Acá el robots.txt solo permite ?pagina-1/2/3 — tope duro también.
     max_pages: 3
+    # Sitemap de listados, declarado por el propio robots.txt del sitio.
+    # Armando la URL a mano solo se llega a /departamentos/venta/palermo, y
+    # con el tope de 3 páginas eso son 60 avisos de los ~10.000 que
+    # Argenprop tiene en Palermo. El sitemap muestra que el portal indexa
+    # además palermo-chico, -hollywood, -soho, -nuevo y -viejo: cada una es
+    # otra búsqueda con sus propias 3 páginas. Medido: 3 de esas rutas dan
+    # 145 avisos distintos contra 58.
+    #
+    # El nombre lleva operación y región: para alquiler o para GBA hay que
+    # cambiarlo (mirá la lista en /robots.txt). null lo apaga y se vuelve a
+    # una sola búsqueda por zona.
+    sitemap: "sitemap-listing-venta-caba"
+    # Cuántas de esas búsquedas pedir por corrida. Las 18 de Palermo son 54
+    # páginas seguidas y Cloudflare corta mucho antes: probado el 21/09,
+    # pasaron 8 y el resto fueron bloqueos. Pedirlas todas de una no trae
+    # más datos, trae más bloqueos. Con 6 se rota: la del barrio entero va
+    # siempre y las demás se reparten, así que en unos días se recorren
+    # todas igual. Con 0 se piden todas de una.
+    max_searches_per_zone: 6
     # Mismo criterio que Zonaprop: `Allow: /*?orden-menorprecio` es el único
     # orden habilitado. Acá además `Disallow: /*?*&*` impide combinar el
     # orden con la paginación, así que de esta pasada sale una sola página.
