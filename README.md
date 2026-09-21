@@ -81,6 +81,13 @@ La comparación es **por m²** y no por tipología: casi nunca hay venta y
 alquiler de la misma cantidad de ambientes en el mismo edificio, así que un
 monoambiente en alquiler sirve para medir un 3 ambientes en venta.
 
+El dashboard trae las mismas dos columnas por aviso: `alquiler_mes` y
+`rinde_anual_pct`, vacías cuando no hay ningún alquiler de ese edificio. No
+son "el alquiler de ese departamento" —eso no existe, el aviso es de venta—
+sino lo que rendiría ese metraje a los USD/m² a los que se alquila el
+edificio. Por eso un 3 ambientes y un monoambiente de la misma torre
+muestran números distintos saliendo del mismo dato.
+
 El rendimiento es **bruto** — alquiler anual sobre precio de venta, sin
 descontar expensas, impuestos, vacancia ni comisión. Sirve para comparar
 edificios entre sí; el número de bolsillo es más bajo. Mirá `venta_avisos` y

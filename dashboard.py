@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
-from inmobot import analyze, config, db, demo, places
+from inmobot import analyze, config, db, demo, places, yields
 
 st.set_page_config(page_title="inmobot", layout="wide")
 st.title("inmobot — mercado en vivo")
@@ -124,6 +124,36 @@ filtered = filtered.assign(
 
 evitar_m = cfg.get_path("analysis.location.evitar_m", 200)
 
+# --- lo que rinde el edificio, si hay alquileres del mismo punto --------- #
+# El alquiler no sale del aviso —un aviso de venta no dice cuánto se alquila—
+# sino de la base de alquileres, cruzando por edificio: dos avisos son del
+# mismo cuando su dirección geocodifica al mismo punto. Ver inmobot/yields.py.
+#
+# Lo que se muestra no es "el alquiler de ese departamento" (no existe) sino
+# lo que rendiría ESE metraje a los USD/m² que se alquila el edificio. Por
+# eso un 3 ambientes y un monoambiente de la misma torre dan números
+# distintos aunque salgan del mismo dato.
+filtered["alquiler_mes"] = pd.NA
+filtered["rinde_anual_pct"] = pd.NA
+
+_ruta_alquileres = Path(cfg.get_path("storage.rentals_path", "data/rentals.db"))
+if not use_demo and _ruta_alquileres.exists():
+    with db.connect(_ruta_alquileres, readonly=True) as _conn_alq:
+        _por_edificio = yields._lado(_conn_alq, "alquiler")
+    if not _por_edificio.empty:
+        _punto = list(zip(filtered["latitude"].round(6), filtered["longitude"].round(6)))
+        # Solo los avisos que publican dirección tienen un punto del
+        # geocodificador; los que traen coordenadas del portal son
+        # aproximadas y no identifican un edificio.
+        _con_direccion = filtered["address"].notna() & filtered["address"].str.strip().ne("")
+        _alq_m2 = pd.Series(_punto, index=filtered.index).map(
+            _por_edificio["alquiler_por_m2"]
+        ).where(_con_direccion)
+        filtered["alquiler_mes"] = (_alq_m2 * filtered["area"]).round(0)
+        filtered["rinde_anual_pct"] = (
+            100 * _alq_m2 * 12 / filtered["price_per_m2"]
+        ).round(1)
+
 REFERENCIAS = {
     "subte": ("Subte", [40, 120, 220]),
     "hospitales": ("Hospital con guardia", [235, 150, 35]),
@@ -157,7 +187,8 @@ st.subheader("Destacados (vs. el promedio de su zona/ambientes)")
 comparable = filtered[filtered["n_comparables"] >= 2]
 cols = [
     "title", "zone", "rooms", "area", "area_estimada", "price_norm",
-    "price_per_m2", "vs_promedio_pct", "subte_m", "url",
+    "price_per_m2", "vs_promedio_pct", "alquiler_mes", "rinde_anual_pct",
+    "subte_m", "url",
 ]
 linked_cols = [c for c in cols if c not in ("url", "area_estimada")]
 
