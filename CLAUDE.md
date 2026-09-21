@@ -114,6 +114,19 @@ Antes de implementar: revisar el `robots.txt` de las fichas y medir cuántas se
 pueden pedir sin disparar la verificación. Otra opción es buscar la dirección
 en el texto de la descripción, que a veces la menciona, pero eso es adivinar.
 
+### Agregar una zona no es solo sumarla a la lista
+
+Cada portal nombra los barrios distinto y ninguno devuelve 404 cuando no
+reconoce el slug: devuelven otra búsqueda. Agregando "Cañitas" a
+`search.zones`, MercadoLibre entendió bien (45 avisos de CABA), Zonaprop
+trajo uno de Córdoba y Remax devolvió los 22.864 del país entero — 148
+avisos de Allen, San Jerónimo y Mar del Plata entraron a la base con
+precio, m² y fotos perfectamente válidos.
+
+Hay dos redes ahora: `search.bbox` descarta lo que cae fuera del recuadro,
+y Remax corta la zona si los `geoLabel` no mencionan el barrio pedido. Las
+dos son redes, no reemplazan mirar el primer scrape de una zona nueva.
+
 ## Cómo quiero que trabajes
 
 - Corré el código antes de decir que anda. Si no lo pudiste probar, decilo.
