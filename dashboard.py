@@ -135,6 +135,7 @@ evitar_m = cfg.get_path("analysis.location.evitar_m", 200)
 # distintos aunque salgan del mismo dato.
 filtered["alquiler_mes"] = pd.NA
 filtered["rinde_anual_pct"] = pd.NA
+filtered["alquiler_url"] = pd.NA
 
 _ruta_alquileres = Path(cfg.get_path("storage.rentals_path", "data/rentals.db"))
 if not use_demo and _ruta_alquileres.exists():
@@ -153,6 +154,11 @@ if not use_demo and _ruta_alquileres.exists():
         filtered["rinde_anual_pct"] = (
             100 * _alq_m2 * 12 / filtered["price_per_m2"]
         ).round(1)
+        # Un alquiler cualquiera de ese edificio, para abrirlo y comprobar
+        # que la dirección es la misma. Si el cruce se equivoca, se ve acá.
+        filtered["alquiler_url"] = pd.Series(_punto, index=filtered.index).map(
+            _por_edificio["alquiler_url"]
+        ).where(_con_direccion)
 
 REFERENCIAS = {
     "subte": ("Subte", [40, 120, 220]),
@@ -188,9 +194,11 @@ comparable = filtered[filtered["n_comparables"] >= 2]
 cols = [
     "title", "zone", "rooms", "area", "area_estimada", "price_norm",
     "price_per_m2", "vs_promedio_pct", "alquiler_mes", "rinde_anual_pct",
-    "subte_m", "url",
+    "alquiler_url", "subte_m", "url",
 ]
-linked_cols = [c for c in cols if c not in ("url", "area_estimada")]
+# `url` y `alquiler_url` no se linkean sobre sí mismas: la celda ya ES el
+# link. `area_estimada` es un booleano, no tiene adónde llevar.
+linked_cols = [c for c in cols if c not in ("url", "alquiler_url", "area_estimada")]
 
 
 _TABLE_CSS = """
@@ -232,7 +240,14 @@ def sortable_table(frame: pd.DataFrame, columns: list[str], key: str, default_co
     st.dataframe(
         shown[columns].round(1), hide_index=True, width="stretch",
         on_select="rerun", selection_mode="single-column", key=key,
-        column_config={"url": st.column_config.LinkColumn("url")},
+        column_config={
+            "url": st.column_config.LinkColumn("url"),
+            "alquiler_url": st.column_config.LinkColumn(
+                "alquiler_url",
+                help="Un alquiler de ese mismo edificio. Abrilo para "
+                     "comprobar que la dirección coincide con la del aviso.",
+            ),
+        },
     )
 
 

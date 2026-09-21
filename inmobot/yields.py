@@ -41,7 +41,7 @@ def _lado(conn: sqlite3.Connection, etiqueta: str) -> pd.DataFrame:
     altura— de las coordenadas aproximadas que publica el portal.
     """
     df = pd.read_sql_query(
-        """SELECT latitude, longitude, address, rooms, price_norm,
+        """SELECT latitude, longitude, address, url, rooms, price_norm,
                   COALESCE(covered_area, total_area) AS area
              FROM listings
             WHERE active = 1
@@ -63,6 +63,10 @@ def _lado(conn: sqlite3.Connection, etiqueta: str) -> pd.DataFrame:
             f"{etiqueta}_precio": ("price_norm", "median"),
             f"{etiqueta}_avisos": ("price_norm", "size"),
             f"{etiqueta}_ambientes": ("rooms", "median"),
+            # Un aviso cualquiera del edificio, para poder abrirlo y
+            # comprobar que la dirección es la que decimos. Un cruce que no
+            # se puede auditar hay que creerlo, y no es la idea.
+            f"{etiqueta}_url": ("url", "first"),
             "latitude": ("latitude", "first"),
             "longitude": ("longitude", "first"),
             "address": ("address", "first"),
