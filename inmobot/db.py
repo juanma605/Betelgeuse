@@ -86,12 +86,36 @@ def now_iso() -> str:
 
 
 @contextmanager
-def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
+def connect(path: str | Path, readonly: bool = False) -> Iterator[sqlite3.Connection]:
+    """Una conexión a la base, en modo WAL.
+
+    WAL deja que un escritor y varios lectores convivan. Sin él, el scrape
+    tomaba la base entera mientras insertaba y el dashboard no podía ni
+    leerla: `OperationalError: database is locked`, en medio de una corrida
+    larga. Es una propiedad del archivo, así que basta con setearlo una vez.
+
+    `readonly=True` abre sin permiso de escritura y sin tocar el esquema:
+    para leer no hace falta crear tablas ni migrar columnas, y justamente
+    ese `CREATE TABLE IF NOT EXISTS` era lo que pedía el lock. Es lo que
+    usa el dashboard.
+    """
     path = Path(path)
+    if readonly:
+        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=30)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+        return
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    # El timeout es para el caso inverso: dos escritores (el cron de las 7 y
+    # una corrida a mano). En vez de fallar en el acto, espera su turno.
+    conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
     try:
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
         _agregar_columnas_nuevas(conn)
         yield conn

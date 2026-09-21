@@ -161,6 +161,13 @@ def cmd_scrape(cfg) -> None:
                 for key in totals:
                     totals[key] += stats[key]
 
+                # Cerrar la transacción acá y no al final de la corrida. Con
+                # una sola abierta, una corrida de dos horas tenía la base
+                # tomada dos horas y el dashboard no podía ni leerla. De
+                # paso, si el scrape se corta a la mitad no se pierde lo que
+                # las fuentes anteriores ya habían traído.
+                conn.commit()
+
         geo_cfg = cfg.get_path("geocoding", {}) or {}
         if geo_cfg.get("enabled"):
             ubic = geocode.completar_coordenadas(conn, geo_cfg)

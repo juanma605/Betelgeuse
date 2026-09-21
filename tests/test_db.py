@@ -7,6 +7,10 @@ corrida bloqueada borraba medio barrio de la base. El arreglo fue pasarle a
 para que no vuelva.
 """
 
+import sqlite3
+
+import pytest
+
 from inmobot import db
 
 
@@ -117,3 +121,39 @@ def test_con_max_misses_en_cero_no_se_da_de_baja_nunca(tmp_path):
         for _ in range(20):
             assert db.mark_inactive_after_misses(conn, set(), "zonaprop", ["Palermo"], 0) == 0
         assert activos(conn, "Palermo") == 2
+
+
+def test_se_puede_leer_mientras_otro_escribe(tmp_path):
+    """El dashboard reventaba con `database is locked` en medio de un scrape
+    largo. Eran dos cosas encadenadas: la base no estaba en WAL, así que el
+    escritor excluía a todos, y el dashboard además abría en modo escritura
+    porque `connect` corre `CREATE TABLE IF NOT EXISTS` al entrar.
+    """
+    ruta = tmp_path / "t.db"
+    with db.connect(ruta) as conn:
+        poblar(conn, "Palermo", 3)
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+    # Un escritor con la transacción abierta, como el scrape entre fuentes.
+    with db.connect(ruta) as escritor:
+        poblar(escritor, "Almagro", 2)
+
+        with db.connect(ruta, readonly=True) as lector:
+            vistos = lector.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
+            # Ve lo confirmado, no lo que el otro está escribiendo.
+            assert vistos == 3
+
+    with db.connect(ruta, readonly=True) as lector:
+        assert lector.execute("SELECT COUNT(*) FROM listings").fetchone()[0] == 5
+
+
+def test_en_solo_lectura_no_se_puede_escribir(tmp_path):
+    """Si el dashboard pudiera escribir, un bug suyo corrompería la base que
+    junta el scrape."""
+    ruta = tmp_path / "t.db"
+    with db.connect(ruta) as conn:
+        poblar(conn, "Palermo", 1)
+
+    with db.connect(ruta, readonly=True) as lector:
+        with pytest.raises(sqlite3.OperationalError):
+            lector.execute("DELETE FROM listings")

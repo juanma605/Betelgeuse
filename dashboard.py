@@ -28,7 +28,10 @@ cfg = config.load("config.yaml")
 # nada del proyecto.
 use_demo = "--demo" in sys.argv or not Path(cfg.get_path("storage.path")).exists()
 
-with db.connect(demo.db_path(cfg, use_demo)) as conn:
+# Solo lectura: el dashboard no escribe nada, y abrirlo en modo escritura
+# lo dejaba afuera durante un scrape largo ("database is locked") por el
+# `CREATE TABLE IF NOT EXISTS` que corre al conectarse.
+with db.connect(demo.db_path(cfg, use_demo), readonly=True) as conn:
     df = analyze.load_active(conn)
     drops = analyze.price_drops(conn)
     history = analyze.history_note(conn)
