@@ -167,6 +167,35 @@ def test_remax_le_pega_la_provincia_al_barrio():
     assert remax.build({})._url("Palermo", 1).endswith("-en-palermo")
 
 
+def test_remax_se_da_cuenta_cuando_le_devuelven_otra_busqueda():
+    """El fallo que nos metió 148 avisos de Allen, San Jerónimo y Mar del
+    Plata en la base: Remax no responde 404 ante un barrio que no conoce
+    (Las Cañitas no existe para ellos), devuelve otra búsqueda. Los avisos
+    son válidos —precio, m², fotos— y lo único que los delata es el barrio."""
+    palermo = ["Palermo, Capital Federal", "Palermo Chico, Capital Federal"]
+    assert not remax.busqueda_degradada(palermo, "Palermo")
+    # Buscando Cañitas volvieron los 22.864 del país entero.
+    del_pais = ["Caballito, Capital Federal", "Balvanera, Capital Federal", "Allen, Río Negro"]
+    assert remax.busqueda_degradada(del_pais, "Cañitas")
+    # Esos mismos resultados son legítimos si lo que pedimos era Caballito.
+    assert not remax.busqueda_degradada(del_pais, "Caballito")
+    # Sin etiquetas no se acusa: si Remax cambia el state, el scraper sigue
+    # trayendo avisos en vez de cortar todas las zonas.
+    assert not remax.busqueda_degradada([], "Palermo")
+
+
+def test_remax_lee_los_barrios_del_estado_de_la_pagina():
+    state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
+    assert sorted(set(remax.geo_labels(state))) == [
+        "Almagro, Capital Federal", "Boedo, Capital Federal",
+    ]
+    # Una búsqueda de Almagro que devuelve Almagro y un vecino está bien;
+    # lo que delata a la degradada es que el barrio pedido no esté en ninguno.
+    assert not remax.busqueda_degradada(remax.geo_labels(state), "Almagro")
+    assert remax.busqueda_degradada(remax.geo_labels(state), "Villa Urquiza")
+    assert remax.geo_labels("") == []
+
+
 def test_remax_saca_las_coordenadas_del_estado_de_la_pagina():
     state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
     coords = remax.coords_by_slug(state)

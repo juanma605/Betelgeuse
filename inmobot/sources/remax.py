@@ -97,7 +97,17 @@ class RemaxSource:
                 if not cards:
                     return
 
-                coords = coords_by_slug(page_obj.evaluate(STATE_JS))
+                state = page_obj.evaluate(STATE_JS)
+                if busqueda_degradada(geo_labels(state), zone):
+                    self.incomplete_zones.add(zone)
+                    log.warning(
+                        "[remax] %s no es un barrio que Remax reconozca: devolvió "
+                        "otra búsqueda (%s). Corto la zona sin guardar nada.",
+                        zone, ", ".join(sorted(set(geo_labels(state)))[:3]) or "sin etiquetas",
+                    )
+                    return
+
+                coords = coords_by_slug(state)
                 for card in cards:
                     item = self._map(card, zone)
                     if item:
@@ -156,6 +166,47 @@ class RemaxSource:
                     break
 
         return item
+
+
+def geo_labels(state_json: str | None) -> list[str]:
+    """Los `geoLabel` ("Palermo, Capital Federal") que trae el transfer state.
+
+    Sirven para contestar la única pregunta que Remax no contesta sola: ¿esto
+    es la búsqueda que pedí? Ver `busqueda_degradada`.
+    """
+    try:
+        stack = [json.loads(state_json or "")]
+    except ValueError:
+        return []
+    out: list[str] = []
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if isinstance(node.get("geoLabel"), str):
+                out.append(node["geoLabel"])
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return out
+
+
+def busqueda_degradada(labels: list[str], zone: str) -> bool:
+    """True si los avisos que volvieron no son de la zona que pedimos.
+
+    Remax no responde 404 ante un slug de zona que no reconoce: devuelve
+    otra búsqueda. `-en-palermo` daba 1 aviso, `-en-canitas-capital-federal`
+    da los 22.864 del país entero. Sin esto el scraper no tiene forma de
+    notarlo: los avisos son válidos, tienen precio, m² y fotos — están en
+    otra ciudad.
+
+    Se mira que el barrio pedido aparezca en alguno de los geoLabel. Alcanza
+    con alguno porque Remax mete barrios vecinos en los resultados; lo que
+    delata a una búsqueda degradada es que no aparezca en ninguno.
+    """
+    if not labels:
+        return False  # sin dato no acusamos: puede ser un cambio del state
+    pedido = slug(zone)
+    return not any(pedido in slug(label) for label in labels)
 
 
 def coords_by_slug(state_json: str | None) -> dict[str, tuple[float, float]]:
