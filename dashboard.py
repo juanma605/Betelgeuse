@@ -47,6 +47,16 @@ if df.empty:
     st.warning("No hay avisos activos. Corré `python -m inmobot scrape` primero.")
     st.stop()
 
+# Distancia a lo que hace mejor o peor a una ubicación. Se calcula sobre la
+# base entera y antes de filtrar, porque ahora también se filtra por esto.
+_distancias = places.distancias(df)
+df = df.assign(
+    subte_m=_distancias["subte_m"].round(0),
+    evitar_m=_distancias["evitar_m"].round(0),
+)
+SIN_TOPE = 3000          # el slider al máximo significa "no filtres"
+sin_ubicacion = int(df["subte_m"].isna().sum())
+
 # --- filtros ---------------------------------------------------------- #
 with st.sidebar:
     st.header("Filtros")
@@ -60,6 +70,23 @@ with st.sidebar:
     pmin, pmax = int(df["price_norm"].min()), int(df["price_norm"].max())
     price_range = st.slider("Precio", pmin, pmax, (pmin, pmax))
 
+    st.subheader("Ubicación")
+    max_subte = st.slider(
+        "Máxima distancia al subte (m)", 200, SIN_TOPE, SIN_TOPE, step=100,
+        help="Al tope no filtra nada. 1.000 m son unos 12 minutos caminando.",
+    )
+    min_evitar = st.slider(
+        "Mínima distancia a hospital o cuartel (m)", 0, 1000, 0, step=50,
+        help="Descarta los que están MÁS CERCA que esto. En 0 no filtra nada. "
+             "Son las dos fuentes de sirenas a cualquier hora.",
+    )
+    solo_ubicados = st.checkbox(
+        "Solo avisos con ubicación conocida", value=False,
+        help=f"{sin_ubicacion} avisos no publican dirección ni coordenadas. "
+             "Sin esto, siguen apareciendo aunque filtres por distancia: no "
+             "sabemos dónde están, no que estén mal ubicados.",
+    )
+
 filtered = df.copy()
 if zones:
     filtered = filtered[filtered["zone"].isin(zones)]
@@ -70,6 +97,16 @@ if sources:
 if not incl_off_plan:
     filtered = filtered[~filtered["off_plan"]]
 filtered = filtered[filtered["price_norm"].between(*price_range)]
+
+# Un aviso sin coordenadas no se descarta por distancia: no sabemos dónde
+# está, que es distinto de saber que está lejos. Para sacarlos está el
+# checkbox, que es una decisión aparte y explícita.
+if solo_ubicados:
+    filtered = filtered[filtered["subte_m"].notna()]
+if max_subte < SIN_TOPE:
+    filtered = filtered[filtered["subte_m"].isna() | (filtered["subte_m"] <= max_subte)]
+if min_evitar > 0:
+    filtered = filtered[filtered["evitar_m"].isna() | (filtered["evitar_m"] >= min_evitar)]
 
 # --- promedio del propio grupo (zona + ambientes), sin piso de muestra -- #
 # El promedio de referencia sale solo de avisos con m² cubiertos, igual que
@@ -85,13 +122,6 @@ filtered = filtered.assign(
     area_estimada=filtered["area_source"] == "total",
 )
 
-# Distancia a lo que hace mejor o peor a una ubicación: se calcula acá para
-# poder ordenar la tabla por eso y mostrarlo en el mapa.
-_distancias = places.distancias(filtered)
-filtered = filtered.assign(
-    subte_m=_distancias["subte_m"].round(0),
-    evitar_m=_distancias["evitar_m"].round(0),
-)
 evitar_m = cfg.get_path("analysis.location.evitar_m", 200)
 
 REFERENCIAS = {

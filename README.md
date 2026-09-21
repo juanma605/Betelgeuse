@@ -85,6 +85,12 @@ Un aviso sin coordenadas **no se puntúa con cero** en esa parte: se lo mide con
 las demás y ese peso se reparte. Si no, faltar un dato pesaría igual que estar
 mal ubicado.
 
+El dashboard filtra por lo mismo: una distancia máxima al subte y una mínima
+a hospitales y cuarteles. Los avisos sin ubicación siguen apareciendo aunque
+se filtre por distancia —no sabemos dónde están, que es distinto de saber que
+están lejos— y para sacarlos hay un checkbox aparte, que es una decisión
+propia y no un efecto colateral de mover un slider.
+
 Remax y Mudafy publican coordenadas. Las otras tres publican la dirección, y
 esa dirección se convierte en un punto con el normalizador del GCBA después de
 cada scrape (`geocoding` en el config). Cada dirección se consulta una sola vez
