@@ -154,6 +154,11 @@ def passes_filters(item: dict, search_cfg: dict) -> tuple[bool, str]:
     ):
         return False, "coordenadas fuera del recuadro de búsqueda"
 
+    piso = search_cfg.get("min_price_per_m2")
+    area = item.get("covered_area") or item.get("total_area")
+    if piso and area and price / area < piso:
+        return False, "precio por m² por debajo de lo creíble"
+
     return True, ""
 
 

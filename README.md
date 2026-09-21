@@ -124,6 +124,30 @@ scraper no explota — sigue corriendo y llena la base de nulls, que es la forma
 en que estos proyectos se rompen sin que nadie se entere. Ya pasó: Argenprop
 sacó el elemento con el barrio y el fixture lo destapó.
 
+## Lo que no es una oferta
+
+Ordenar la base por precio/m² ascendente debería mostrar las oportunidades.
+Mostraba otra cosa: "Compramos propiedades en CABA" a 20 USD/m² (una
+inmobiliaria que compra, no que vende), "Propiedad ficticia no consultar" a
+75, y emprendimientos publicando el anticipo en lugar del precio de la
+unidad, a 142 y 179.
+
+`search.min_price_per_m2` pone un piso grosero —200 USD/m², contra una
+mediana de CABA de ~2.700— que descarta disparates sin rozar ninguna
+oportunidad real. Un aviso sin superficie no se filtra: no hay con qué
+dividir, y adivinar es peor.
+
+El pozo se detecta además mirando la URL entera y no solo la ruta
+`/emprendimiento/`: Zonaprop arma el slug con el título original del aviso,
+así que ahí queda la palabra que el título mostrado perdió. "Malva Rivera |
+Viví donde el diseño hace la diferencia" no dice nada, pero su URL termina
+en `...-departamenos-venta-pozo-...`.
+
+Sigue habiendo avisos que publican un precio que no es el de la propiedad
+("consultar precio" con un 22.222 de relleno). No se los marca como pozo
+porque no lo son, y el piso de precio/m² solo los agarra si el número de
+relleno es lo bastante bajo.
+
 ## Dar de baja un aviso: solo si vimos toda la zona
 
 Un aviso que deja de aparecer suele haberse vendido, y darlo de baja es lo

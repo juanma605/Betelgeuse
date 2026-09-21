@@ -200,3 +200,31 @@ def test_history_note_calla_cuando_ya_hay_historial(tmp_path):
             ("a", "2026-02-01T00:00:00.000+00:00", 100_000, "USD", 100_000),
         ])
         assert analyze.history_note(conn) is None
+
+
+def test_el_pozo_tambien_se_detecta_en_la_url():
+    """Zonaprop arma el slug con el título original del aviso, así que ahí
+    queda la palabra que el título mostrado perdió. Mirando solo el título
+    se colaban a la lista de más baratos por m², que es justo donde uno
+    busca oportunidades."""
+    # El título es puro marketing y no dice nada; la URL sí.
+    assert analyze.is_off_plan(
+        "Malva rivera | Viví donde el diseño hace la diferencia",
+        "https://www.zonaprop.com.ar/propiedades/clasificado/veclapin-departamenos-venta-pozo-60119968.html",
+    )
+    assert analyze.is_off_plan(
+        "Corredor Responsable: Graciela Teramo cpi 3712",
+        "https://www.zonaprop.com.ar/propiedades/clasificado/veclapin-venta-mono-ambiente-desde-pozo-1.html",
+    )
+    # Así es como una preventa se anuncia cuando no dice "pozo".
+    assert analyze.is_off_plan("Maker Belgrano – Entrega estimada: 2º trimestre 2027", None)
+    assert analyze.is_off_plan("Venta mediante cesión de derechos – oportunidad", None)
+    assert analyze.is_off_plan("Precio total de la unidad: usd 151.000", None)
+
+    # Y lo que no es pozo sigue sin serlo. "Entrega inmediata" es lo
+    # contrario: está listo para habitar.
+    assert not analyze.is_off_plan("¡Entrega inmediata! Medidores ya instalados", None)
+    assert not analyze.is_off_plan(
+        "Venta de 1 amb en flores, anticipo en el boleto de compra", None
+    )
+    assert not analyze.is_off_plan("Depto 3 ambientes reciclado con balcón", None)

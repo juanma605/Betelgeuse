@@ -36,6 +36,19 @@ search:
     lon_min: -58.54
     lon_max: -58.33
 
+  # Piso de precio por m² (en la moneda de comparación). Por debajo de esto
+  # no hay oferta seria: son errores de carga o avisos que no son una venta.
+  # Vistos en la base: "Compramos propiedades en CABA" a 20 USD/m² (una
+  # inmobiliaria que compra, no que vende), "Propiedad ficticia no
+  # consultar" a 75, y emprendimientos que publican el anticipo en vez del
+  # precio de la unidad, a 142 y 179.
+  #
+  # Es un piso grosero a propósito: la mediana de CABA ronda los 2.700, así
+  # que 200 descarta disparates sin rozar ninguna oportunidad real. Si un
+  # aviso no publica superficie no se filtra, porque no hay con qué
+  # dividir. Dejalo en null para no aplicarlo.
+  min_price_per_m2: 200
+
   # Superficie máxima creíble para lo que buscás. Por encima es un error de
   # carga del portal (hubo un 1½ ambiente con "33420 m²"): se borra ese dato,
   # pero el aviso se guarda igual. No es un filtro: el aviso no se descarta.

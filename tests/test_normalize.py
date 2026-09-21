@@ -149,3 +149,28 @@ def test_el_recuadro_se_puede_mover_desde_el_config():
         "bbox": {"lat_min": -38.15, "lat_max": -37.90, "lon_min": -57.65, "lon_max": -57.50},
     }
     assert passes_filters(mar_del_plata, cfg)[0]
+
+
+def test_descarta_precios_por_m2_que_no_son_una_oferta():
+    """Ordenando la base por USD/m² ascendente, lo primero no eran gangas:
+    "Compramos propiedades en CABA" a 20 USD/m² (una inmobiliaria que compra,
+    no que vende), "Propiedad ficticia no consultar" a 75, y emprendimientos
+    publicando el anticipo en vez del precio de la unidad, a 142.
+
+    El piso es grosero a propósito: la mediana de CABA ronda los 2.700.
+    """
+    cfg = {"price_min": 10_000, "price_max": 600_000, "min_price_per_m2": 200}
+
+    compran = {"price_norm": 10_000, "total_area": 500}          # 20 USD/m²
+    pasa, motivo = passes_filters(compran, cfg)
+    assert not pasa and "m²" in motivo
+
+    # Una ganga de verdad sigue entrando: 117 m² a 85.000 son 726 USD/m², un
+    # cuarto de la mediana, y es un aviso real a refaccionar.
+    assert passes_filters({"price_norm": 85_000, "covered_area": 117}, cfg)[0]
+
+    # Sin superficie no hay con qué dividir: no se filtra en vez de adivinar.
+    assert passes_filters({"price_norm": 10_000}, cfg)[0]
+
+    # Y sin el piso configurado, nada cambia.
+    assert passes_filters(compran, {"price_min": 10_000, "price_max": 600_000})[0]

@@ -29,9 +29,19 @@ from . import places
 # excluyéramos cualquier reventa que mencione una reforma pasada.
 OFF_PLAN_PATTERN = re.compile(
     r"emprendimiento|xintel|en construcci|a estrenar|pozo|proyecto\b"
-    r"|desarrollo|proyecta|reciclaje completo",
+    r"|desarrollo|proyecta|reciclaje completo"
+    # Cómo se escribe una preventa cuando el título no dice "pozo":
+    # "Maker Belgrano – Entrega estimada: 2º trimestre 2027".
+    r"|entrega\s+(?:estimada|20\d\d)"
+    # Comprar el boleto de otro comprador: es pozo por definición.
+    r"|cesi[óo]n de derechos"
+    # "Precio total de la unidad: USD 151.000" aparece cuando lo publicado
+    # es el anticipo y no la unidad.
+    r"|precio total de la unidad|fideicomiso",
     re.IGNORECASE,
 )
+# "anticipo" a secas quedó afuera a propósito: la mitad de las veces es una
+# reventa hablando de la seña del boleto ("anticipo en el boleto de compra").
 
 # Zonaprop publica los emprendimientos bajo esta ruta. Es una señal
 # estructural del portal, no una palabra que alguien eligió poner: atrapa los
@@ -42,10 +52,17 @@ OFF_PLAN_URL_MARK = "/emprendimiento/"
 
 def is_off_plan(title: str | None, url: str | None) -> bool:
     """Preventa/pozo: se paga en cuotas y se entrega a futuro, así que su
-    precio por m² no es comparable con el de una reventa."""
-    if url and OFF_PLAN_URL_MARK in url:
-        return True
-    return bool(OFF_PLAN_PATTERN.search(title or ""))
+    precio por m² no es comparable con el de una reventa.
+
+    Se mira el título y también la URL entera, no solo la ruta
+    `/emprendimiento/`: Zonaprop arma el slug con el título original del
+    aviso, así que ahí queda la palabra que el título mostrado perdió.
+    "Malva Rivera | Viví donde el diseño hace la diferencia" no dice nada,
+    pero su URL termina en `...-departamenos-venta-pozo-...`.
+    """
+    return bool(
+        OFF_PLAN_PATTERN.search(title or "") or OFF_PLAN_PATTERN.search(url or "")
+    )
 
 
 def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
