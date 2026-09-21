@@ -52,9 +52,15 @@ zona/ambientes: un demo sesgado a un solo barrio no mostraría nada.
 ## Cuánto rinde comprar
 
 ```bash
-python -m inmobot scrape --config config-alquiler.yaml   # -> data/rentals.db
+python -m inmobot scrape --config config-alquiler.yaml    # -> data/rentals.db
+python -m inmobot geocode --config config-alquiler.yaml   # resuelve direcciones
 python -m inmobot yields
 ```
+
+El paso del medio importa más de lo que parece: el cruce solo puede emparejar
+avisos con la dirección ya convertida en punto, y una base recién armada
+queda con miles sin resolver. `geocode` las resuelve todas de una, sin
+volver a pedirle nada a los portales.
 
 La pregunta no es cuánto sale un departamento sino qué relación hay entre lo
 que sale y lo que rinde. Un 2 ambientes de 150.000 USD que se alquila a 600

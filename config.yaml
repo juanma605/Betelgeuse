@@ -220,7 +220,7 @@ sources:
 # cacheada, así que el atraso se va limpiando en pocas corridas.
 geocoding:
   enabled: true
-  max_per_run: 300        # direcciones nuevas por corrida (las cacheadas no cuentan)
+  max_per_run: 3000        # direcciones nuevas por corrida (las cacheadas no cuentan)
   rate_limit_seconds: 1.0
 
 # Cuántos portales recorrer a la vez. Cada uno mantiene su propio rate

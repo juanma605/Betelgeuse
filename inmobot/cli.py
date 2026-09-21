@@ -192,6 +192,29 @@ def cmd_scrape(cfg) -> None:
     )
 
 
+def cmd_geocode(cfg) -> None:
+    """Solo geocodificar, sin scrapear.
+
+    El scrape ya lo hace al final de cada corrida, pero con un tope por
+    corrida: una base recién armada queda con miles de direcciones sin
+    resolver y tardaría varias corridas en ponerse al día. Esto las resuelve
+    de una, sin volver a pedirle nada a los portales.
+    """
+    geo_cfg = cfg.get_path("geocoding", {}) or {}
+    if not geo_cfg.get("enabled"):
+        log.error("geocoding.enabled está en false en el config.")
+        return
+
+    with db.connect(cfg.get_path("storage.path")) as conn:
+        ubic = geocode.completar_coordenadas(conn, geo_cfg)
+    log.info(
+        "[geocode] %d avisos ubicados por su dirección (%d direcciones nuevas "
+        "consultadas, %d sin resultado, %d avisos siguen sin ubicación)",
+        ubic["ubicados"], ubic["consultadas"], ubic["sin_resultado"],
+        ubic["pendientes"],
+    )
+
+
 def cmd_yields(cfg) -> None:
     """Cuánto rinde comprar, cruzando venta contra alquiler del mismo edificio."""
     ruta_alquileres = Path(cfg.get_path("storage.rentals_path", "data/rentals.db"))
@@ -339,7 +362,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="inmobot")
     parser.add_argument(
         "command",
-        choices=["scrape", "analyze", "yields", "export", "demo-export"],
+        choices=[
+            "scrape", "analyze", "yields", "geocode", "export", "demo-export",
+        ],
     )
     parser.add_argument("-c", "--config", default="config.yaml")
     parser.add_argument("-o", "--out", default=None)
@@ -368,6 +393,8 @@ def main() -> None:
             cmd_scrape(cfg)
         elif args.command == "analyze":
             cmd_analyze(cfg, use_demo=args.demo)
+        elif args.command == "geocode":
+            cmd_geocode(cfg)
         elif args.command == "yields":
             cmd_yields(cfg)
         elif args.command == "demo-export":

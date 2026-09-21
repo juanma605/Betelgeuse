@@ -78,7 +78,7 @@ sources:
     max_pages: 25
 geocoding:
   enabled: true
-  max_per_run: 300
+  max_per_run: 3000
   rate_limit_seconds: 1.0
 scrape:
   parallel_sources: 3
