@@ -24,6 +24,11 @@ MAX_PAGES = 5
 
 CARD_SELECTOR = "[data-posting-type]"
 
+# Zonaprop mezcla en el listado avisos sueltos (PROPERTY) y edificios
+# enteros (DEVELOPMENT). Se espera por el atributo a secas para no
+# depender de su valor al cargar la página, y se filtra en _map().
+TIPO_AVISO_SUELTO = "PROPERTY"
+
 _FEATURE_PATTERNS = [
     (re.compile(r"([\d.,]+)\s*m²\s*tot"), "total_area"),
     (re.compile(r"([\d.,]+)\s*m²\s*cub"), "covered_area"),
@@ -114,6 +119,16 @@ class ZonapropSource:
     # ---------------------------------------------------------------- #
 
     def _map(self, card, zone: str) -> dict | None:
+        # Un emprendimiento no es un departamento: la tarjeta trae el precio
+        # mínimo ("desde USD 148.680", el de la unidad más chica) junto con
+        # el rango de superficies ("48 a 148 m² tot."), y el parser se
+        # quedaba con el precio de la unidad de 48 m² y los m² de la de 148.
+        # Eso daba 1.005 USD/m² en Palermo, donde la mediana ronda los
+        # 2.700: un 66% de descuento fabricado por nosotros. Mismo criterio
+        # que en mercadolibre._is_project.
+        if card.get_attribute("data-posting-type") != TIPO_AVISO_SUELTO:
+            return None
+
         source_id = card.get_attribute("data-id")
         href = card.get_attribute("data-to-posting")
         if not source_id or not href:

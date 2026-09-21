@@ -177,6 +177,13 @@ y la certificación exige 30 usuarios activos y 300 publicaciones. Se buscan
 solo "propiedades individuales": sin ese filtro la primera página son casi
 todos emprendimientos.
 
+Los emprendimientos se descartan en MercadoLibre y en Zonaprop, que los
+mezclan con los avisos sueltos en el mismo listado. No es purismo: la tarjeta
+de un edificio trae el precio de la unidad más chica ("desde USD 148.680")
+junto al rango de superficies ("48 a 148 m² tot."), y cruzar las dos puntas
+da 1.005 USD/m² donde la mediana ronda los 2.700 — un 66% de descuento
+fabricado, entrando justo a la lista de subvaluados.
+
 Las medianas de precio/m² salen solo de avisos con **m² cubiertos**. Los que
 publican solo totales se evalúan igual pero salen marcados con `*`: su precio
 por m² sale más bajo de lo real (un PH con patio, un balcón grande).

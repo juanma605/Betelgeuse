@@ -66,6 +66,22 @@ def test_zonaprop_map():
     assert item["address"] == "Gascon al 300"
 
 
+def test_zonaprop_no_toma_un_emprendimiento_por_un_departamento():
+    """El listado de Zonaprop mezcla avisos sueltos con edificios enteros, y
+    el edificio publica el precio de la unidad más chica junto al rango de
+    superficies: "desde USD 148.680" y "48 a 148 m² tot.". El parser se
+    quedaba con el precio de la unidad de 48 m² y los m² de la de 148, o sea
+    1.005 USD/m² en Palermo, donde la mediana ronda los 2.700. Un 66% de
+    descuento fabricado por nosotros, entrando justo a la lista de
+    subvaluados, que es la salida principal del proyecto."""
+    card = card_from("zonaprop_development_card.html", "[data-posting-type]")
+    assert zonaprop.build({})._map(card, "Palermo") is None
+
+    # El aviso suelto de al lado sigue entrando.
+    suelto = card_from("zonaprop_card.html", "[data-posting-type]")
+    assert zonaprop.build({})._map(suelto, "Almagro") is not None
+
+
 def test_zonaprop_no_confunde_el_titulo_con_la_direccion():
     # Cuando el aviso no tiene dirección, Zonaprop mete el título en el mismo
     # elemento. Un título es largo; una dirección, no.
