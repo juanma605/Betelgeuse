@@ -128,20 +128,6 @@ def test_mudafy_map():
     assert item["photo_count"] == 1
 
 
-def test_remax_map():
-    card = card_from("remax_card.html", ".card-remax")
-    item = remax.build({})._map(card, "Almagro")
-
-    assert_esquema_comun(item)
-    assert item["id"] == "remax:venta-departamento-dos-ambientes-con-balcon"
-    assert (item["price"], item["currency"]) == (75_000, "USD")
-    # Remax publica los m² con decimales: el punto es decimal, no de miles.
-    assert item["total_area"] == 39.04
-    assert item["covered_area"] == 25.5
-    assert (item["rooms"], item["bathrooms"]) == (2, 1)
-    assert item["maintenance_fee"] == 75_000
-    assert item["photo_count"] == 3
-
 
 def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     """Zonaprop y Argenprop prohíben reordenar la búsqueda salvo por precio
@@ -165,84 +151,6 @@ def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     assert argenprop.build({})._url("departamentos", "Palermo", 2).endswith("?pagina-2")
 
 
-def test_remax_le_pega_la_provincia_al_barrio():
-    """Remax no responde 404 ante un slug que no reconoce: devuelve otra
-    búsqueda. `-en-palermo` es un landing residual de 1 aviso y
-    `-en-villa-urquiza` da 0, mientras los de verdad tienen 1466 y 452. La
-    base tuvo un solo aviso de Palermo durante semanas sin un solo error."""
-    source = remax.build({"zone_suffix": "-capital-federal"})
-
-    assert source._url("Palermo", 1) == (
-        "https://www.remax.com.ar/departamentos-en-venta-en-palermo-capital-federal"
-    )
-    # El sufijo va pegado al barrio, antes del `?page=` (0-indexado).
-    assert source._url("Villa Urquiza", 2) == (
-        "https://www.remax.com.ar/departamentos-en-venta-en-villa-urquiza-capital-federal?page=1"
-    )
-    # Sin configurar, la URL es la de antes: buscar fuera de CABA no necesita
-    # sufijo y esto no se lo impone.
-    assert remax.build({})._url("Palermo", 1).endswith("-en-palermo")
-
-
-class _PaginaFalsa:
-    def __init__(self, texto): self._texto = texto
-    def inner_text(self, _sel): return self._texto
-
-
-def test_remax_distingue_el_final_de_la_lista_de_una_carga_fallida():
-    """Al pasarse de la última página, Remax no da 404: muestra "No hay
-    propiedades que coincidan" y el selector de tarjetas nunca aparece, o
-    sea la misma excepción que una carga fallida. Confundirlos marca la zona
-    como incompleta y sus avisos vendidos no se dan de baja nunca."""
-    source = remax.build({})
-    assert source._sin_resultados(_PaginaFalsa("No hay propiedades que coincidan con tu búsqueda"))
-    assert not source._sin_resultados(_PaginaFalsa("Verificación de seguridad en curso"))
-
-    # Si la página ni siquiera se deja leer, es una falla, no un final.
-    class Rota:
-        def inner_text(self, _sel): raise RuntimeError("sin página")
-    assert not source._sin_resultados(Rota())
-
-
-def test_remax_se_da_cuenta_cuando_le_devuelven_otra_busqueda():
-    """El fallo que nos metió 148 avisos de Allen, San Jerónimo y Mar del
-    Plata en la base: Remax no responde 404 ante un barrio que no conoce
-    (Las Cañitas no existe para ellos), devuelve otra búsqueda. Los avisos
-    son válidos —precio, m², fotos— y lo único que los delata es el barrio."""
-    palermo = ["Palermo, Capital Federal", "Palermo Chico, Capital Federal"]
-    assert not remax.busqueda_degradada(palermo, "Palermo")
-    # Buscando Cañitas volvieron los 22.864 del país entero.
-    del_pais = ["Caballito, Capital Federal", "Balvanera, Capital Federal", "Allen, Río Negro"]
-    assert remax.busqueda_degradada(del_pais, "Cañitas")
-    # Esos mismos resultados son legítimos si lo que pedimos era Caballito.
-    assert not remax.busqueda_degradada(del_pais, "Caballito")
-    # Sin etiquetas no se acusa: si Remax cambia el state, el scraper sigue
-    # trayendo avisos en vez de cortar todas las zonas.
-    assert not remax.busqueda_degradada([], "Palermo")
-
-
-def test_remax_lee_los_barrios_del_estado_de_la_pagina():
-    state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
-    assert sorted(set(remax.geo_labels(state))) == [
-        "Almagro, Capital Federal", "Boedo, Capital Federal",
-    ]
-    # Una búsqueda de Almagro que devuelve Almagro y un vecino está bien;
-    # lo que delata a la degradada es que el barrio pedido no esté en ninguno.
-    assert not remax.busqueda_degradada(remax.geo_labels(state), "Almagro")
-    assert remax.busqueda_degradada(remax.geo_labels(state), "Villa Urquiza")
-    assert remax.geo_labels("") == []
-
-
-def test_remax_saca_las_coordenadas_del_estado_de_la_pagina():
-    state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
-    coords = remax.coords_by_slug(state)
-
-    # GeoJSON viene [lon, lat]: si se dieran vuelta, los puntos caerían en
-    # el océano Antártico y nadie lo notaría hasta abrir el mapa.
-    assert coords["venta-departamento-dos-ambientes-con-balcon"] == (-34.6102, -58.4201)
-    assert "venta-monoambiente-sin-ubicacion" not in coords
-    assert len(coords) == 2
-    assert remax.coords_by_slug("") == {}
 
 
 def test_mudafy_no_le_presta_coordenadas_a_un_aviso_que_no_las_tiene():
@@ -305,3 +213,108 @@ def test_reconoce_el_cartel_de_cloudflare_en_los_dos_idiomas():
     assert is_bot_challenge(Pagina("Un momento...", "Verificación de seguridad en curso"))
     assert is_bot_challenge(Pagina("Just a moment...", "Let's confirm you are human"))
     assert not is_bot_challenge(Pagina("Departamentos en venta en Palermo", "20 resultados"))
+
+def remax_avisos():
+    state = (FIXTURES / "remax_state.json").read_text(encoding="utf-8")
+    return remax.listings_from_state(state), state
+
+
+def test_remax_map():
+    """Remax se lee del transfer state, no del DOM: el JSON que alimenta las
+    tarjetas llega con el HTML inicial (2,0 s contra 7,8 s esperando a que
+    Angular dibuje) y el `pageSize` de la URL se reenvía a su API, así que
+    entran 100 avisos por página en vez de 24."""
+    avisos, _ = remax_avisos()
+    item = remax.build({})._map(avisos[0], "Almagro")
+
+    assert_esquema_comun(item)
+    assert item["id"] == "remax:venta-departamento-dos-ambientes-con-balcon"
+    assert (item["price"], item["currency"]) == (75_000, "USD")
+    # Las dos superficies vienen como números: se terminó el "33.420" que
+    # obligaba a adivinar si el punto era decimal o de miles.
+    assert (item["covered_area"], item["total_area"]) == (25.5, 39.04)
+    assert (item["rooms"], item["bedrooms"], item["bathrooms"]) == (2, 1, 1)
+    assert item["maintenance_fee"] == 75_000
+    assert item["photo_count"] == 3
+    # El barrio solo está en el state: la tarjeta del HTML no lo expone.
+    assert (item["neighborhood"], item["city"]) == ("Almagro", "Capital Federal")
+    # GeoJSON viene [lon, lat]: si se dieran vuelta, los puntos caerían en
+    # el océano Antártico y nadie lo notaría hasta abrir el mapa.
+    assert (item["latitude"], item["longitude"]) == (-34.6102, -58.4201)
+
+
+def test_remax_no_inventa_datos_que_el_aviso_no_trae():
+    """Remax rellena con 0 lo que no publica, y un 0 que entra como dato es
+    peor que un nulo: un monoambiente con 0 m² cubiertos dividiría el precio
+    por cero al calcular el precio/m²."""
+    avisos, _ = remax_avisos()
+    item = remax.build({})._map(avisos[1], "Almagro")
+
+    assert item["covered_area"] is None      # venía 0
+    assert item["bedrooms"] is None          # venía 0
+    assert item["total_area"] == 32
+    assert item["photo_count"] == 0
+    assert "maintenance_fee" not in item     # sin moneda de expensas
+    assert item.get("latitude") is None      # sin location, no se le presta
+                                             # la del aviso anterior
+
+
+def test_remax_descarta_los_emprendimientos():
+    """Igual que en Zonaprop y MercadoLibre: el edificio publica el precio
+    de la unidad más chica contra el rango de superficies, y cruzar las dos
+    puntas fabrica un descuento que no existe."""
+    avisos, _ = remax_avisos()
+    assert remax.build({})._map(avisos[2], "Almagro") is None
+
+
+def test_remax_le_pega_la_provincia_al_barrio():
+    """Remax no responde 404 ante un slug que no reconoce: devuelve otra
+    búsqueda. `-en-palermo` es un landing residual de 1 aviso y
+    `-en-villa-urquiza` da 0, mientras los de verdad tienen 1466 y 452."""
+    source = remax.build({"zone_suffix": "-capital-federal", "page_size": 100})
+
+    # `page` es 0-indexado del lado de Remax: nuestra página 1 es su page=0.
+    assert source._url("Palermo", 1) == (
+        "https://www.remax.com.ar/departamentos-en-venta-en-palermo-capital-federal"
+        "?page=0&pageSize=100"
+    )
+    assert "-en-villa-urquiza-capital-federal?page=2" in source._url("Villa Urquiza", 3)
+    # Sin configurar, sin sufijo: buscar fuera de CABA no lo necesita.
+    assert "-en-palermo?" in remax.build({})._url("Palermo", 1)
+
+
+def test_remax_se_da_cuenta_cuando_le_devuelven_otra_busqueda():
+    """El fallo que metió 148 avisos de Allen, San Jerónimo y Mar del Plata
+    en la base, y que en la corrida del 21/09 cortó "Belgrano R" cuando
+    Remax contestó con Beccar, San Isidro y Belén de Escobar."""
+    palermo = ["Palermo, Capital Federal", "Palermo Chico, Capital Federal"]
+    assert not remax.busqueda_degradada(palermo, "Palermo")
+    del_pais = ["Beccar, San Isidro", "Belén de Escobar, Escobar", "Belgrano, Capital Federal"]
+    assert remax.busqueda_degradada(del_pais, "Belgrano R")
+    # Esos mismos resultados son legítimos si lo que pedimos era Belgrano.
+    assert not remax.busqueda_degradada(del_pais, "Belgrano")
+    # Sin etiquetas no se acusa: si Remax cambia el formato del state, el
+    # scraper sigue trayendo avisos en vez de cortar todas las zonas.
+    assert not remax.busqueda_degradada([], "Palermo")
+
+
+def test_remax_reconoce_el_final_de_la_lista():
+    """Pasarse de la última página devuelve la lista vacía, no un 404. Si
+    eso contara como falla, la zona quedaría marcada incompleta y sus avisos
+    vendidos no se darían de baja nunca."""
+    assert remax.listings_from_state('{"1": {"b": {"data": {"data": []}}, '
+                                     '"u": "api/findAllWithEntrepreneurships?page=99"}}') == []
+    assert remax.listings_from_state("") == []
+    assert remax.listings_from_state("no soy json") == []
+    avisos, _ = remax_avisos()
+    assert len(avisos) == 3
+
+
+def test_remax_lee_los_barrios_del_estado_de_la_pagina():
+    _, state = remax_avisos()
+    assert sorted(set(remax.geo_labels(state))) == [
+        "Almagro, Capital Federal", "Boedo, Capital Federal",
+    ]
+    assert not remax.busqueda_degradada(remax.geo_labels(state), "Almagro")
+    assert remax.busqueda_degradada(remax.geo_labels(state), "Villa Urquiza")
+    assert remax.geo_labels("") == []

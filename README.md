@@ -150,7 +150,7 @@ venderle esto a un cliente, le cambiás el YAML y nada más.
 | Zonaprop | Playwright, 8 s entre páginas | 5 páginas + 1 reordenada (`robots.txt`) | no, solo totales | sí, por dirección |
 | Argenprop | Playwright, 8 s entre páginas | 3 páginas + 1 reordenada (`robots.txt`) | sí | sí, por dirección |
 | Mudafy | Playwright | ~25 avisos (no pagina) | no dice (se toma como total) | sí, ~100 m |
-| Remax | Playwright, 6 s entre páginas | 15 páginas (tope propio) | sí | sí |
+| Remax | Playwright, 6 s entre páginas | hasta agotar la zona (tope propio) | sí | sí |
 | MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | sí, por dirección |
 
 El tope de cada fuente sale de su `robots.txt`, no de lo que aguanta el
@@ -163,9 +163,15 @@ queda en una página (~48 avisos) de las 5.793 que tiene en Palermo; la
 única forma de crecer ahí es agregar más barrios a `search.zones`.
 
 Remax es la excepción: su `robots.txt` son cuatro líneas y no impone ni
-tope de páginas ni `Crawl-delay`. Las 15 páginas son un límite nuestro
-(~360 avisos por zona, ~21 minutos de las 8 zonas). Es además la fuente más
-completa: publica m² cubiertos y coordenadas en el listado.
+tope de páginas ni `Crawl-delay`, así que se lo agota. Es además la fuente
+más completa: publica m² cubiertos, coordenadas y barrio.
+
+De Remax no se lee el HTML sino el `#ng-state`, el JSON que Angular deja
+en la página para no volver a pedir los resultados. Llega con el HTML
+inicial, así que no hay que esperar a que se dibujen las tarjetas, y el
+`pageSize` de la URL se reenvía a su API: **100 avisos en 2,6 s contra 24
+en 7,8 s**. Palermo entero pasó de 62 páginas y 11,9 minutos a 16 páginas y
+2,4 minutos — cuatro veces menos pedidos al sitio, además de más rápido.
 
 Zonaprop y Argenprop cortan con verificación de Cloudflare: el scraper la
 detecta, corta esa zona sin dar de baja sus avisos, y avisa — no la resuelve

@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from typing import Iterator
 
 from ..normalize import slug
 from ._browser import browser_page, is_bot_challenge
-from ._text import parse_number, parse_price
 
 log = logging.getLogger(__name__)
 
@@ -28,30 +26,18 @@ BASE = "https://www.remax.com.ar"
 MAX_PAGES = 3
 
 CARD_SELECTOR = ".card-remax"
+# El transfer state llega con el HTML inicial, antes de que Angular
+# dibuje una sola tarjeta: esperar por él en vez de por `.card-remax`
+# baja la página de 7,8 s a 2,0 s. Y como el `pageSize` de la URL se
+# reenvía a la API, en esos 2,6 s entran 100 avisos en vez de 24.
+STATE_SELECTOR = "#ng-state"
 
-# Lo que Remax muestra cuando te pasaste de la última página. No es un
-# error: es el final de los resultados, y hay que distinguirlo de una
-# carga fallida — si no, agotar una zona la marca como incompleta y sus
-# avisos vendidos no se dan de baja nunca.
-SIN_RESULTADOS = "No hay propiedades que coincidan"
-
-# Cada cuántas páginas avisar que seguimos vivos. Una zona grande son 60
-# páginas y unos 12 minutos: sin esto el log queda mudo todo ese rato y
-# no hay forma de distinguir "paginando" de "colgado".
 PAGINAS_POR_AVISO = 10
 
 # Angular deja los resultados de la búsqueda serializados en este <script>
 # (transfer state) para no volver a pedirlos en el cliente. Ahí viene la
 # ubicación de cada aviso, que la tarjeta no muestra.
 STATE_JS = "() => document.getElementById('ng-state')?.textContent || ''"
-
-_FEATURE_PATTERNS = [
-    (re.compile(r"([\d.,]+)\s*m²\s*totales"), "total_area"),
-    (re.compile(r"([\d.,]+)\s*m²\s*cubiertos"), "covered_area"),
-    (re.compile(r"(\d+)\s*ambientes"), "rooms"),
-    (re.compile(r"(\d+)\s*dormitorios"), "bedrooms"),
-    (re.compile(r"(\d+)\s*baños"), "bathrooms"),
-]
 
 
 class RemaxSource:
@@ -65,6 +51,7 @@ class RemaxSource:
         # Remax desambigua los barrios repetidos con la provincia pegada al
         # slug. Ver _url().
         self.zone_suffix = conf.get("zone_suffix", "")
+        self.page_size = int(conf.get("page_size", 100))
         self.incomplete_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
@@ -79,9 +66,9 @@ class RemaxSource:
         """
         zona = slug(zone) + self.zone_suffix
         base = f"{BASE}/{self.property_slug}-en-{self.operation_slug}-en-{zona}"
-        # page 1 = URL base (sin parámetro); Remax pagina con ?page=N pero
-        # 0-indexado, así que nuestra página 2 es su "?page=1".
-        return base if page == 1 else f"{base}?page={page - 1}"
+        # Remax pagina con ?page=N pero 0-indexado: nuestra página 2 es su
+        # "?page=1". El pageSize lo reenvía tal cual a su API.
+        return f"{base}?page={page - 1}&pageSize={self.page_size}"
 
     # ---------------------------------------------------------------- #
 
@@ -92,14 +79,11 @@ class RemaxSource:
                 url = self._url(zone, page_num)
                 try:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
-                    page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
+                    page_obj.wait_for_selector(
+                        STATE_SELECTOR, timeout=20000, state="attached"
+                    )
+                    state = page_obj.evaluate(STATE_JS)
                 except Exception as exc:
-                    if self._sin_resultados(page_obj):
-                        log.info(
-                            "[remax] %s: se acabaron los resultados en la pág %d.",
-                            zone, page_num,
-                        )
-                        return
                     self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
@@ -111,11 +95,17 @@ class RemaxSource:
                         log.info("[remax] corto en %s (pág %d): %s", zone, page_num, exc)
                     return
 
-                cards = page_obj.query_selector_all(CARD_SELECTOR)
-                if not cards:
+                avisos = listings_from_state(state)
+                if not avisos:
+                    # Pasarse de la última página devuelve la lista vacía. Es
+                    # el final, no una falla: la zona no se marca incompleta,
+                    # así sus avisos vendidos sí se dan de baja.
+                    log.info(
+                        "[remax] %s: se acabaron los resultados en la pág %d.",
+                        zone, page_num,
+                    )
                     return
 
-                state = page_obj.evaluate(STATE_JS)
                 if busqueda_degradada(geo_labels(state), zone):
                     self.incomplete_zones.add(zone)
                     log.warning(
@@ -131,96 +121,90 @@ class RemaxSource:
                         zone, page_num, traidos,
                     )
 
-                coords = coords_by_slug(state)
-                for card in cards:
-                    item = self._map(card, zone)
+                for aviso in avisos:
+                    item = self._map(aviso, zone)
                     if item:
                         traidos += 1
-                        lat_lon = coords.get(item["source_id"])
-                        if lat_lon:
-                            item["latitude"], item["longitude"] = lat_lon
                         yield item
 
                 if page_num < self.max_pages:
                     time.sleep(self.delay)
 
-    @staticmethod
-    def _sin_resultados(page_obj) -> bool:
-        """Distingue "se acabó la lista" de "no cargó"."""
-        try:
-            return SIN_RESULTADOS in page_obj.inner_text("body")
-        except Exception:
-            return False
-
     # ---------------------------------------------------------------- #
 
-    def _map(self, card, zone: str) -> dict | None:
-        link_el = card.query_selector('a[href^="/listings/"]')
-        href = link_el.get_attribute("href") if link_el else None
-        if not href:
+    def _map(self, aviso: dict, zone: str) -> dict | None:
+        """Un aviso del transfer state al esquema común.
+
+        Sale del mismo JSON que alimenta las tarjetas, así que trae lo que
+        la tarjeta muestra y algo más: el barrio (`geoLabel`, que el HTML no
+        expone) y las dos superficies como números, sin el "33.420" ambiguo
+        que obligaba a adivinar si el punto era decimal o de miles.
+        """
+        source_id = aviso.get("slug")
+        if not source_id or aviso.get("entrepreneurship"):
+            # Un emprendimiento publica el precio de la unidad más chica
+            # contra el rango de superficies. Mismo criterio que en
+            # zonaprop y mercadolibre.
             return None
-        source_id = href.rsplit("/", 1)[-1]
 
-        price_el = card.query_selector(".card__price")
-        expenses_el = card.query_selector(".card__expenses")
-        title_el = card.query_selector(".card__description")
-        address_el = card.query_selector(".card__address")
-        features_el = card.query_selector_all(".card__feature--item")
-
-        price, currency = parse_price(price_el.inner_text() if price_el else None)
-        title = (title_el.inner_text().strip() if title_el else None) or zone
-
+        barrio, ciudad = _parse_geo_label(aviso.get("geoLabel"))
         item: dict = {
             "id": f"{self.name}:{source_id}",
             "source": self.name,
             "source_id": source_id,
-            "url": BASE + href if href.startswith("/") else href,
-            "title": title,
+            "url": f"{BASE}/listings/{source_id}",
+            "title": (aviso.get("title") or "").strip() or zone,
             "zone": zone,
-            "price": price,
-            "currency": currency,
-            "photo_count": len(card.query_selector_all('img[alt^="Foto"]')),
+            "price": _numero(aviso.get("price")),
+            "currency": _valor(aviso.get("currency")),
+            "neighborhood": barrio,
+            "city": ciudad,
+            "covered_area": _numero(aviso.get("dimensionCovered")),
+            "total_area": _numero(aviso.get("dimensionTotalBuilt")),
+            "rooms": _numero(aviso.get("totalRooms")),
+            "bedrooms": _numero(aviso.get("bedrooms")),
+            "bathrooms": _numero(aviso.get("bathrooms")),
+            "photo_count": len(aviso.get("photos") or []),
         }
-        if address_el:
-            item["address"] = address_el.inner_text().strip()
-        if expenses_el:
-            item["maintenance_fee"] = parse_number(expenses_el.inner_text())
+        if _valor(aviso.get("expensesCurrency")):
+            item["maintenance_fee"] = _numero(aviso.get("expensesPrice"))
 
-        for feat in features_el:
-            text = feat.inner_text()
-            for pattern, field in _FEATURE_PATTERNS:
-                match = pattern.search(text)
-                if match:
-                    # Remax escribe los m² a la inglesa ("39.04", "33.420"):
-                    # acá el punto es decimal, nunca separador de miles. El
-                    # precio y las expensas sí van a la argentina, por eso
-                    # esto es solo para las características.
-                    item[field] = parse_number(match.group(1), decimal_point=True)
-                    break
-
+        par = (aviso.get("location") or {}).get("coordinates")
+        if isinstance(par, list) and len(par) == 2:
+            lon, lat = par                      # GeoJSON: [lon, lat]
+            item["latitude"], item["longitude"] = float(lat), float(lon)
         return item
+
+
+def _numero(valor) -> float | None:
+    """0 y None son lo mismo acá: Remax rellena con 0 lo que no publica."""
+    if isinstance(valor, (int, float)) and valor:
+        return float(valor)
+    return None
+
+
+def _valor(campo) -> str | None:
+    return campo.get("value") if isinstance(campo, dict) else None
+
+
+def _parse_geo_label(label: str | None) -> tuple[str | None, str | None]:
+    """"Palermo, Capital Federal" -> ("Palermo", "Capital Federal")."""
+    if not label:
+        return None, None
+    partes = [p.strip() for p in label.split(",")]
+    return partes[0] or None, (partes[1] if len(partes) > 1 else None)
 
 
 def geo_labels(state_json: str | None) -> list[str]:
     """Los `geoLabel` ("Palermo, Capital Federal") que trae el transfer state.
 
-    Sirven para contestar la única pregunta que Remax no contesta sola: ¿esto
-    es la búsqueda que pedí? Ver `busqueda_degradada`.
+    Contestan la única pregunta que Remax no contesta sola: ¿esto es la
+    búsqueda que pedí? Ver `busqueda_degradada`.
     """
-    try:
-        stack = [json.loads(state_json or "")]
-    except ValueError:
-        return []
-    out: list[str] = []
-    while stack:
-        node = stack.pop()
-        if isinstance(node, dict):
-            if isinstance(node.get("geoLabel"), str):
-                out.append(node["geoLabel"])
-            stack.extend(node.values())
-        elif isinstance(node, list):
-            stack.extend(node)
-    return out
+    return [
+        a["geoLabel"] for a in listings_from_state(state_json)
+        if isinstance(a.get("geoLabel"), str)
+    ]
 
 
 def busqueda_degradada(labels: list[str], zone: str) -> bool:
@@ -228,13 +212,14 @@ def busqueda_degradada(labels: list[str], zone: str) -> bool:
 
     Remax no responde 404 ante un slug de zona que no reconoce: devuelve
     otra búsqueda. `-en-palermo` daba 1 aviso, `-en-canitas-capital-federal`
-    da los 22.864 del país entero. Sin esto el scraper no tiene forma de
+    los 22.864 del país entero, y `-en-belgrano-r-capital-federal` contestó
+    con Beccar y Belén de Escobar. Sin esto el scraper no tiene forma de
     notarlo: los avisos son válidos, tienen precio, m² y fotos — están en
     otra ciudad.
 
-    Se mira que el barrio pedido aparezca en alguno de los geoLabel. Alcanza
-    con alguno porque Remax mete barrios vecinos en los resultados; lo que
-    delata a una búsqueda degradada es que no aparezca en ninguno.
+    Alcanza con que el barrio pedido aparezca en alguno de los geoLabel,
+    porque Remax mete vecinos en los resultados; lo que delata a una
+    búsqueda degradada es que no aparezca en ninguno.
     """
     if not labels:
         return False  # sin dato no acusamos: puede ser un cambio del state
@@ -242,30 +227,30 @@ def busqueda_degradada(labels: list[str], zone: str) -> bool:
     return not any(pedido in slug(label) for label in labels)
 
 
-def coords_by_slug(state_json: str | None) -> dict[str, tuple[float, float]]:
-    """{slug: (lat, lon)} a partir del transfer state de la página.
+def listings_from_state(state_json: str | None) -> list[dict]:
+    """Los avisos que el transfer state trae de la API de búsqueda.
 
-    Se recorre el JSON entero buscando objetos con `slug` y `location` en vez
-    de ir a una ruta fija: la clave de primer nivel es un hash que Angular
-    cambia entre builds. Ojo con el orden: es GeoJSON, `[lon, lat]`.
+    La clave de primer nivel es un hash que Angular cambia entre builds, así
+    que se busca por la URL de la request en vez de por una ruta fija.
     """
     try:
-        stack = [json.loads(state_json or "")]
+        estado = json.loads(state_json or "")
     except ValueError:
-        return {}
-    out: dict[str, tuple[float, float]] = {}
-    while stack:
-        node = stack.pop()
-        if isinstance(node, dict):
-            loc = node.get("location")
-            pair = loc.get("coordinates") if isinstance(loc, dict) else None
-            if isinstance(node.get("slug"), str) and isinstance(pair, list) and len(pair) == 2:
-                lon, lat = pair
-                out[node["slug"]] = (float(lat), float(lon))
-            stack.extend(node.values())
-        elif isinstance(node, list):
-            stack.extend(node)
-    return out
+        return []
+    if not isinstance(estado, dict):
+        return []
+    for valor in estado.values():
+        if not isinstance(valor, dict):
+            continue
+        if "findAllWithEntrepreneurships" not in str(valor.get("u", "")):
+            continue
+        datos = (valor.get("b") or {}).get("data") or {}
+        avisos = datos.get("data")
+        if isinstance(avisos, list):
+            return [a for a in avisos if isinstance(a, dict)]
+    return []
+
+
 
 
 def build(conf: dict) -> RemaxSource:

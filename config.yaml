@@ -160,13 +160,15 @@ sources:
     # ni Crawl-delay, y `?page=N` pagina de verdad (probado hasta la 30: 24
     # avisos distintos cada una, cero repetidos). El tope es nuestro.
     #
-    # Puesto para agotar la zona más grande (Palermo necesita 62 páginas).
-    # Las chicas cortan solas: el scraper reconoce el "No hay propiedades que
-    # coincidan" del final de la lista y termina sin marcar la zona como
-    # incompleta. Con 15 traíamos 2247 de los 5537 avisos que Remax tiene en
-    # nuestras 8 zonas; agotarlo son ~231 páginas y unos 45 minutos de las
-    # ~70 que pasa a durar el scrape entero.
-    max_pages: 65
+    # Avisos por página. Remax reenvía este número a su API tal cual, y el
+    # scraper lee el JSON que viene con el HTML en vez de esperar a que
+    # Angular dibuje las tarjetas: 100 avisos en 2,6 s contra 24 en 7,8 s.
+    # Palermo entero pasó de 62 páginas y 11,9 min a 16 páginas y 2,4 min.
+    page_size: 100
+    # Tope de seguridad: con page_size 100 son 2500 avisos por zona, muy por
+    # encima de los 1456 de Palermo. Las zonas cortan solas cuando la lista
+    # vuelve vacía, sin quedar marcadas como incompletas.
+    max_pages: 25
 
 # MercadoLibre y Argenprop publican la dirección pero no las coordenadas.
 # Después de cada scrape, esas direcciones se convierten en un punto con el

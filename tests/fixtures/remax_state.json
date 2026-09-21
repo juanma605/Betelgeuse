@@ -5,49 +5,100 @@
         "totalItems": 3,
         "data": [
           {
-            "id": "a1b2c3",
             "slug": "venta-departamento-dos-ambientes-con-balcon",
+            "title": "Venta departamento dos ambientes con balcon",
+            "geoLabel": "Almagro, Capital Federal",
+            "entrepreneurship": false,
+            "price": 75000,
+            "currency": {
+              "id": 1,
+              "value": "USD"
+            },
+            "expensesPrice": 75000,
+            "expensesCurrency": {
+              "id": 2,
+              "value": "ARS"
+            },
+            "dimensionCovered": 25.5,
+            "dimensionTotalBuilt": 39.04,
+            "dimensionLand": 0,
+            "totalRooms": 2,
+            "bedrooms": 1,
+            "bathrooms": 1,
+            "photos": [
+              {
+                "value": "a"
+              },
+              {
+                "value": "b"
+              },
+              {
+                "value": "c"
+              }
+            ],
             "location": {
               "type": "Point",
               "coordinates": [
                 -58.4201,
                 -34.6102
               ]
-            },
-            "totalRooms": 2,
-            "price": 75000,
-            "geoLabel": "Almagro, Capital Federal"
+            }
           },
           {
-            "id": "d4e5f6",
             "slug": "venta-monoambiente-sin-ubicacion",
-            "location": null,
-            "totalRooms": 1,
+            "title": "Venta monoambiente sin ubicacion",
+            "geoLabel": "Almagro, Capital Federal",
+            "entrepreneurship": false,
             "price": 60000,
-            "geoLabel": "Almagro, Capital Federal"
+            "currency": {
+              "id": 1,
+              "value": "USD"
+            },
+            "expensesPrice": 0,
+            "expensesCurrency": null,
+            "dimensionCovered": 0,
+            "dimensionTotalBuilt": 32,
+            "totalRooms": 1,
+            "bedrooms": 0,
+            "bathrooms": 1,
+            "photos": [],
+            "location": null
           },
           {
-            "id": "g7h8i9",
-            "slug": "venta-tres-ambientes-al-frente",
+            "slug": "venta-torre-en-pozo",
+            "title": "Torre en pozo, unidades desde",
+            "geoLabel": "Boedo, Capital Federal",
+            "entrepreneurship": true,
+            "price": 105900,
+            "currency": {
+              "id": 1,
+              "value": "USD"
+            },
+            "dimensionCovered": 160,
+            "dimensionTotalBuilt": 160,
+            "totalRooms": 3,
+            "photos": [
+              {
+                "value": "a"
+              }
+            ],
             "location": {
               "type": "Point",
               "coordinates": [
                 -58.4133,
-                -34.6051
+                -34.6251
               ]
-            },
-            "totalRooms": 3,
-            "price": 110000,
-            "geoLabel": "Boedo, Capital Federal"
+            }
           }
         ]
       }
-    }
+    },
+    "u": "https://api-ar.redremax.com/remaxweb-ar/api/listings/findAllWithEntrepreneurships?page=0&pageSize=100&sort=-createdAt"
   },
   "1920445": {
     "b": {
       "slug": "departamentos-en-venta-en-almagro",
-      "title": "Página de búsqueda"
+      "title": "Pagina de busqueda"
     }
   }
 }
