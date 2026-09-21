@@ -15,6 +15,7 @@ import argparse
 import logging
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -42,6 +43,31 @@ SOURCE_BUILDERS = {
 }
 
 
+def _recolectar(name: str, source, search_cfg: dict, dedup_cfg: dict):
+    """Recorre todas las zonas de una fuente. Solo lee: no toca la base.
+
+    Corre en su propio hilo, uno por portal. Devuelve la fuente además de
+    los avisos porque el caller necesita mirarle `incomplete_zones` y
+    `capped_zones` para decidir qué puede dar de baja.
+    """
+    kept: list[dict] = []
+    seen_ids: set[str] = set()
+    rejected = 0
+
+    for zone in search_cfg["zones"]:
+        log.info("[%s] buscando en %s...", name, zone)
+        for item in source.fetch(zone, search_cfg):
+            item = normalize.normalize(item, search_cfg, dedup_cfg)
+            ok, _reason = normalize.passes_filters(item, search_cfg)
+            if not ok:
+                rejected += 1
+                continue
+            kept.append(item)
+            seen_ids.add(item["id"])
+
+    return source, kept, seen_ids, rejected
+
+
 def cmd_scrape(cfg) -> None:
     search_cfg = cfg["search"]
     dedup_cfg = cfg["dedup"]
@@ -56,73 +82,84 @@ def cmd_scrape(cfg) -> None:
     started = time.monotonic()
     totals = {"new": 0, "updated": 0, "price_changes": 0}
 
+    tareas = [
+        (name, conf, SOURCE_BUILDERS[name])
+        for name, conf in cfg["sources"].items()
+        if conf.get("enabled") and name in SOURCE_BUILDERS
+    ]
+    for name, conf in cfg["sources"].items():
+        if conf.get("enabled") and name not in SOURCE_BUILDERS:
+            log.warning("Fuente '%s' habilitada pero no implementada todavía.", name)
+
+    # Los portales se recorren en paralelo, uno por hilo. Cada uno mantiene
+    # su propio rate limit, así que ninguno recibe pedidos más seguido que
+    # antes: lo que cambia es que el reloj total pasa de ser la suma de los
+    # cinco a ser el del más lento. Esperarlos en fila no los cuidaba, solo
+    # nos hacía esperar.
+    #
+    # Los hilos solo leen. La base la escribe el principal a medida que cada
+    # fuente termina, que es como venía siendo — SQLite y varios escritores
+    # es un problema que no hace falta tener.
+    paralelas = max(1, int(cfg.get_path("scrape.parallel_sources", 3)))
+
     with db.connect(cfg.get_path("storage.path")) as conn:
-        for name, conf in cfg["sources"].items():
-            if not conf.get("enabled"):
-                continue
-            builder = SOURCE_BUILDERS.get(name)
-            if builder is None:
-                log.warning("Fuente '%s' habilitada pero no implementada todavía.", name)
-                continue
+        with ThreadPoolExecutor(max_workers=paralelas) as pool:
+            futuros = {
+                pool.submit(_recolectar, name, builder(conf), search_cfg, dedup_cfg): name
+                for name, conf, builder in tareas
+            }
+            for futuro in as_completed(futuros):
+                name = futuros[futuro]
+                try:
+                    source, kept, seen_ids, rejected = futuro.result()
+                except Exception:
+                    # Que un portal explote no puede llevarse puestos a los
+                    # otros cuatro ni la corrida entera.
+                    log.exception("[%s] la fuente falló, sigo con las demás", name)
+                    continue
 
-            source = builder(conf)
-            kept: list[dict] = []
-            seen_ids: set[str] = set()
-            rejected = 0
+                stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
 
-            for zone in search_cfg["zones"]:
-                log.info("[%s] buscando en %s...", name, zone)
-                for item in source.fetch(zone, search_cfg):
-                    item = normalize.normalize(item, search_cfg, dedup_cfg)
-                    ok, _reason = normalize.passes_filters(item, search_cfg)
-                    if not ok:
-                        rejected += 1
-                        continue
-                    kept.append(item)
-                    seen_ids.add(item["id"])
+                # Cada zona cae en uno de tres casos, y de eso depende qué
+                # derecho tenemos a dar de baja un aviso que no apareció:
+                #
+                #   rota      el fetch se cortó (bloqueo anti-bot, 403, red). No
+                #             leímos nada confiable: no se toca nada.
+                #   con tope  se leyó bien, pero hasta donde permite el
+                #             robots.txt y el inventario sigue. La ausencia no
+                #             prueba venta, así que se cuenta y recién a las
+                #             `max_missed_runs` corridas seguidas se da de baja.
+                #   entera    se llegó al final de la lista (hoy solo Remax).
+                #             Ahí sí, ausente es vendido.
+                rotas = getattr(source, "incomplete_zones", set())
+                con_tope = getattr(source, "capped_zones", set()) - rotas
+                enteras = [
+                    z for z in search_cfg["zones"] if z not in rotas and z not in con_tope
+                ]
 
-            stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
-
-            # Cada zona cae en uno de tres casos, y de eso depende qué
-            # derecho tenemos a dar de baja un aviso que no apareció:
-            #
-            #   rota      el fetch se cortó (bloqueo anti-bot, 403, red). No
-            #             leímos nada confiable: no se toca nada.
-            #   con tope  se leyó bien, pero hasta donde permite el
-            #             robots.txt y el inventario sigue. La ausencia no
-            #             prueba venta, así que se cuenta y recién a las
-            #             `max_missed_runs` corridas seguidas se da de baja.
-            #   entera    se llegó al final de la lista (hoy solo Remax).
-            #             Ahí sí, ausente es vendido.
-            rotas = getattr(source, "incomplete_zones", set())
-            con_tope = getattr(source, "capped_zones", set()) - rotas
-            enteras = [
-                z for z in search_cfg["zones"] if z not in rotas and z not in con_tope
-            ]
-
-            gone = db.mark_inactive(conn, seen_ids, name, zones=enteras)
-            gone += db.mark_inactive_after_misses(
-                conn, seen_ids, name, sorted(con_tope), max_missed_runs
-            )
-            if rotas:
-                log.info(
-                    "[%s] zona(s) incompleta(s), no se dan de baja avisos ahí: %s",
-                    name, ", ".join(sorted(rotas)),
+                gone = db.mark_inactive(conn, seen_ids, name, zones=enteras)
+                gone += db.mark_inactive_after_misses(
+                    conn, seen_ids, name, sorted(con_tope), max_missed_runs
                 )
-            if con_tope:
+                if rotas:
+                    log.info(
+                        "[%s] zona(s) incompleta(s), no se dan de baja avisos ahí: %s",
+                        name, ", ".join(sorted(rotas)),
+                    )
+                if con_tope:
+                    log.info(
+                        "[%s] zona(s) leída(s) hasta el tope del robots.txt: %s — "
+                        "ahí un aviso se da de baja recién tras %d corridas sin verlo.",
+                        name, ", ".join(sorted(con_tope)), max_missed_runs,
+                    )
                 log.info(
-                    "[%s] zona(s) leída(s) hasta el tope del robots.txt: %s — "
-                    "ahí un aviso se da de baja recién tras %d corridas sin verlo.",
-                    name, ", ".join(sorted(con_tope)), max_missed_runs,
+                    "[%s] %d nuevos, %d actualizados, %d cambios de precio, "
+                    "%d dados de baja, %d descartados por filtros",
+                    name, stats["new"], stats["updated"], stats["price_changes"],
+                    gone, rejected,
                 )
-            log.info(
-                "[%s] %d nuevos, %d actualizados, %d cambios de precio, "
-                "%d dados de baja, %d descartados por filtros",
-                name, stats["new"], stats["updated"], stats["price_changes"],
-                gone, rejected,
-            )
-            for key in totals:
-                totals[key] += stats[key]
+                for key in totals:
+                    totals[key] += stats[key]
 
         geo_cfg = cfg.get_path("geocoding", {}) or {}
         if geo_cfg.get("enabled"):

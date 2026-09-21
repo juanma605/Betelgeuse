@@ -124,6 +124,23 @@ scraper no explota — sigue corriendo y llena la base de nulls, que es la forma
 en que estos proyectos se rompen sin que nadie se entere. Ya pasó: Argenprop
 sacó el elemento con el barrio y el fixture lo destapó.
 
+## Los portales se recorren en paralelo
+
+Cada portal corre en su propio hilo. No cambia el ritmo con que se le pide a
+ninguno —cada fuente mantiene su rate limit— pero el reloj total pasa de ser
+la suma de los cinco a ser el del más lento. Esperarlos en fila no los
+cuidaba: solo nos hacía esperar. Medido sobre tres fuentes y dos zonas: 55 s
+en fila contra 32 s en paralelo.
+
+Los hilos solo leen. La base la escribe el hilo principal a medida que cada
+fuente termina, que es como venía siendo: SQLite con varios escritores es un
+problema que no hace falta tener. Y una fuente que explota se registra y se
+sigue con las demás, porque en paralelo una excepción suelta se llevaría la
+corrida entera en vez de un portal.
+
+Se configura con `scrape.parallel_sources`. Cada hilo levanta su propio
+Chromium, así que subirlo cuesta memoria; con 1 vuelve a correr todo en fila.
+
 ## El sitemap como fuente de búsquedas
 
 Armando la URL a mano solo se llega a `/departamentos/venta/palermo`, y como

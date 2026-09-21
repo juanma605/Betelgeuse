@@ -223,6 +223,17 @@ geocoding:
   max_per_run: 300        # direcciones nuevas por corrida (las cacheadas no cuentan)
   rate_limit_seconds: 1.0
 
+# Cuántos portales recorrer a la vez. Cada uno mantiene su propio rate
+# limit, así que ninguno recibe pedidos más seguido que antes: lo que
+# cambia es que el reloj total pasa de ser la suma de los cinco a ser el
+# del más lento. Con Zonaprop en ~80 min y el resto sumando ~45, la
+# diferencia es de ~125 min a ~80.
+#
+# Cada hilo levanta su propio Chromium, así que subirlo cuesta memoria.
+# Con 1 vuelve a correr todo en fila.
+scrape:
+  parallel_sources: 3
+
 storage:
   path: "data/listings.db"
   # Cada corrida guarda un snapshot de precio por aviso. Esto es lo que
