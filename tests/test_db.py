@@ -157,3 +157,36 @@ def test_en_solo_lectura_no_se_puede_escribir(tmp_path):
     with db.connect(ruta, readonly=True) as lector:
         with pytest.raises(sqlite3.OperationalError):
             lector.execute("DELETE FROM listings")
+
+
+def test_una_corrida_de_alquileres_no_da_de_baja_las_ventas(tmp_path):
+    """Los alquileres van a su propia base, así que esto no debería poder
+    pasar nunca. Es el cinturón por si alguna vez los dos configs apuntan al
+    mismo archivo: un scrape de alquileres jamás tiene ventas en `seen_ids`,
+    y sin filtrar por operación las daría de baja todas."""
+    with db.connect(tmp_path / "t.db") as conn:
+        db.upsert_listings(conn, [
+            {"id": "zonaprop:v1", "source": "zonaprop", "source_id": "v1",
+             "zone": "Palermo", "operation": "venta", "price_norm": 200_000},
+            {"id": "zonaprop:a1", "source": "zonaprop", "source_id": "a1",
+             "zone": "Palermo", "operation": "alquiler", "price_norm": 800},
+        ])
+
+        # Corrida de alquileres: solo vio un alquiler, y encima otro distinto.
+        bajas = db.mark_inactive(
+            conn, {"zonaprop:a2"}, "zonaprop", zones=["Palermo"], operation="alquiler"
+        )
+        assert bajas == 1
+        vivos = {r[0] for r in conn.execute("SELECT id FROM listings WHERE active = 1")}
+        assert vivos == {"zonaprop:v1"}, "la venta no se toca"
+
+
+def test_un_aviso_sin_operacion_declarada_es_una_venta(tmp_path):
+    """La columna es NOT NULL para que nada quede en el limbo entre las dos,
+    y el default reproduce lo único que hubo antes de los alquileres."""
+    with db.connect(tmp_path / "t.db") as conn:
+        db.upsert_listings(conn, [
+            {"id": "x:1", "source": "x", "source_id": "1", "zone": "Palermo",
+             "price_norm": 100_000},
+        ])
+        assert conn.execute("SELECT operation FROM listings").fetchone()[0] == "venta"

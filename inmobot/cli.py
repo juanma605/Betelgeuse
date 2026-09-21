@@ -43,7 +43,7 @@ SOURCE_BUILDERS = {
 }
 
 
-def _recolectar(name: str, source, search_cfg: dict, dedup_cfg: dict):
+def _recolectar(name: str, source, search_cfg: dict, dedup_cfg: dict, operation: str):
     """Recorre todas las zonas de una fuente. Solo lee: no toca la base.
 
     Corre en su propio hilo, uno por portal. Devuelve la fuente además de
@@ -62,6 +62,7 @@ def _recolectar(name: str, source, search_cfg: dict, dedup_cfg: dict):
             if not ok:
                 rejected += 1
                 continue
+            item["operation"] = operation
             kept.append(item)
             seen_ids.add(item["id"])
 
@@ -105,11 +106,14 @@ def cmd_scrape(cfg) -> None:
     with db.connect(cfg.get_path("storage.path")) as conn:
         with ThreadPoolExecutor(max_workers=paralelas) as pool:
             futuros = {
-                pool.submit(_recolectar, name, builder(conf), search_cfg, dedup_cfg): name
+                pool.submit(
+                    _recolectar, name, builder(conf), search_cfg, dedup_cfg,
+                    conf.get("operation_slug", "venta"),
+                ): (name, conf.get("operation_slug", "venta"))
                 for name, conf, builder in tareas
             }
             for futuro in as_completed(futuros):
-                name = futuros[futuro]
+                name, operation = futuros[futuro]
                 try:
                     source, kept, seen_ids, rejected = futuro.result()
                 except Exception:
@@ -137,9 +141,12 @@ def cmd_scrape(cfg) -> None:
                     z for z in search_cfg["zones"] if z not in rotas and z not in con_tope
                 ]
 
-                gone = db.mark_inactive(conn, seen_ids, name, zones=enteras)
+                gone = db.mark_inactive(
+                    conn, seen_ids, name, zones=enteras, operation=operation
+                )
                 gone += db.mark_inactive_after_misses(
-                    conn, seen_ids, name, sorted(con_tope), max_missed_runs
+                    conn, seen_ids, name, sorted(con_tope), max_missed_runs,
+                    operation=operation,
                 )
                 if rotas:
                     log.info(

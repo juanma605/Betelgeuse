@@ -38,9 +38,10 @@ SEARCH = {
 
 def test_recolectar_junta_todas_las_zonas_y_no_toca_la_base():
     source, kept, seen, rejected = cli._recolectar(
-        "x", FuenteFalsa(avisos=3), SEARCH, {"enabled": False}
+        "x", FuenteFalsa(avisos=3), SEARCH, {"enabled": False}, "venta"
     )
     assert len(kept) == 6          # 3 avisos x 2 zonas
+    assert {a["operation"] for a in kept} == {"venta"}
     assert len(seen) == 6
     assert rejected == 0
     assert source.incomplete_zones == set()
@@ -48,7 +49,9 @@ def test_recolectar_junta_todas_las_zonas_y_no_toca_la_base():
 
 def test_recolectar_cuenta_los_que_no_pasan_los_filtros():
     exigente = {**SEARCH, "filters": {"covered_area_min": 80}}
-    _, kept, seen, rejected = cli._recolectar("x", FuenteFalsa(2), exigente, {"enabled": False})
+    _, kept, seen, rejected = cli._recolectar(
+        "x", FuenteFalsa(2), exigente, {"enabled": False}, "venta"
+    )
     assert (kept, seen) == ([], set())
     assert rejected == 4
 

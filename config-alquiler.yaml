@@ -1,0 +1,117 @@
+search:
+  zones:
+  - Palermo
+  - Belgrano
+  - Belgrano R
+  - Recoleta
+  - Almagro
+  - Caballito
+  - Cañitas
+  - Villa Urquiza
+  - Colegiales
+  - Villa Crespo
+  currency: USD
+  price_min: 100
+  price_max: 5000
+  bbox:
+    lat_min: -34.71
+    lat_max: -34.52
+    lon_min: -58.54
+    lon_max: -58.33
+  min_price_per_m2: null
+  max_plausible_area_m2: 1000
+  filters:
+    covered_area_min: 10
+    covered_area_max: null
+    total_area_min: null
+    rooms_min: null
+    rooms_max: null
+    bedrooms_min: null
+    max_maintenance_fee: null
+    max_age_years: null
+    require_photos: true
+  fx_rates:
+    ARS_per_USD: 1500
+sources:
+  mercadolibre:
+    enabled: true
+    property_slug: departamentos
+    operation_slug: alquiler
+    listing_slug: propiedades-individuales
+    region_slug: capital-federal
+    rate_limit_seconds: 8.0
+  zonaprop:
+    enabled: true
+    property_slug: departamentos
+    operation_slug: alquiler
+    rate_limit_seconds: 8.0
+    max_pages: 5
+    extra_orders:
+    - -orden-precio-ascendente
+    sitemap: sitemaps_https.xml
+    max_searches_per_zone: 6
+    new_session_per_page: true
+  argenprop:
+    enabled: true
+    property_slug: departamentos
+    operation_slug: alquiler
+    rate_limit_seconds: 8.0
+    max_pages: 3
+    sitemap: sitemap-listing-alquiler-caba
+    max_searches_per_zone: 6
+    extra_orders:
+    - orden-menorprecio
+    new_session_per_page: true
+  mudafy:
+    enabled: true
+    property_slug: departamentos
+    operation_slug: alquiler
+    zone_prefix: caba-
+    rate_limit_seconds: 4.0
+  remax:
+    enabled: true
+    property_slug: departamentos
+    operation_slug: alquiler
+    rate_limit_seconds: 6.0
+    zone_suffix: -capital-federal
+    page_size: 100
+    max_pages: 25
+geocoding:
+  enabled: true
+  max_per_run: 300
+  rate_limit_seconds: 1.0
+scrape:
+  parallel_sources: 3
+storage:
+  path: data/rentals.db
+  keep_snapshots: true
+  max_missed_runs: 7
+dedup:
+  enabled: true
+  area_tolerance_m2: 2
+  price_tolerance_pct: 5
+analysis:
+  undervalued_threshold_pct: 15
+  min_comparables: 20
+  stale_days: 100
+  outlier_trim_pct: 5
+  weights:
+    discount: 50
+    price_drops: 20
+    stale: 0
+    location: 20
+  location:
+    subte_m: 1000
+    evitar_m: 200
+alerts:
+  email:
+    enabled: true
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    smtp_user: env:SMTP_USER
+    smtp_password: env:SMTP_PASSWORD
+    to_addrs:
+    - env:ALERT_TO
+    min_score: 70
+logging:
+  level: INFO

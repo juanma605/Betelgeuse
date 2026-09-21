@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS listings (
     id                TEXT PRIMARY KEY,      -- "<source>:<id nativo>"
     source            TEXT NOT NULL,
     source_id         TEXT NOT NULL,
+    operation         TEXT NOT NULL DEFAULT 'venta',  -- venta | alquiler
     url               TEXT,
     title             TEXT,
     zone              TEXT,
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE INDEX IF NOT EXISTS idx_listings_zone        ON listings(zone);
 CREATE INDEX IF NOT EXISTS idx_listings_fingerprint ON listings(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_listings_active      ON listings(active);
+CREATE INDEX IF NOT EXISTS idx_listings_operation   ON listings(operation);
 
 CREATE TABLE IF NOT EXISTS price_snapshots (
     listing_id  TEXT NOT NULL,
@@ -74,7 +76,7 @@ CREATE TABLE IF NOT EXISTS geocode_cache (
 """
 
 UPSERT_FIELDS = [
-    "id", "source", "source_id", "url", "title", "zone", "neighborhood", "city", "address",
+    "id", "source", "source_id", "operation", "url", "title", "zone", "neighborhood", "city", "address",
     "latitude", "longitude", "price", "currency", "price_norm", "maintenance_fee",
     "covered_area", "total_area", "rooms", "bedrooms", "bathrooms", "age_years",
     "photo_count", "fingerprint", "raw",
@@ -128,7 +130,11 @@ def _agregar_columnas_nuevas(conn: sqlite3.Connection) -> None:
     """CREATE TABLE IF NOT EXISTS no agrega columnas a una tabla que ya existe:
     sin esto, una base vieja se rompe al insertar una columna nueva."""
     existentes = {fila["name"] for fila in conn.execute("PRAGMA table_info(listings)")}
-    for columna, tipo in (("address", "TEXT"), ("missed_runs", "INTEGER DEFAULT 0")):
+    for columna, tipo in (
+        ("address", "TEXT"),
+        ("missed_runs", "INTEGER DEFAULT 0"),
+        ("operation", "TEXT NOT NULL DEFAULT 'venta'"),
+    ):
         if columna not in existentes:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {columna} {tipo}")
 
@@ -148,6 +154,10 @@ def upsert_listings(
         ).fetchone()
 
         values = {field: item.get(field) for field in UPSERT_FIELDS}
+        # Un aviso que no declara operación es una venta: es lo único que
+        # hubo hasta que se agregaron los alquileres, y la columna es NOT
+        # NULL justamente para que nada quede en el limbo entre las dos.
+        values["operation"] = values["operation"] or "venta"
 
         if prev is None:
             columns = ", ".join(UPSERT_FIELDS + ["first_seen", "last_seen", "active"])
@@ -187,6 +197,7 @@ def mark_inactive(
     seen_ids: set[str],
     source: str,
     zones: list[str] | None = None,
+    operation: str = "venta",
 ) -> int:
     """Los avisos de esta fuente que no aparecieron en la corrida se bajan.
 
@@ -194,9 +205,13 @@ def mark_inactive(
     `zones` viene dado, solo se consideran avisos de esas zonas: una zona que
     la fuente no pudo terminar de leer (bloqueo anti-bot, 403, etc.) no debe
     hacer que sus avisos reales se den de baja por no haber aparecido.
+
+    `operation` es lo que impide que una corrida de alquileres dé de baja
+    todas las ventas de esa fuente: los alquileres jamás van a estar en
+    `seen_ids` de un scrape de ventas, ni al revés.
     """
-    query = "SELECT id FROM listings WHERE source = ? AND active = 1"
-    params: list = [source]
+    query = "SELECT id FROM listings WHERE source = ? AND operation = ? AND active = 1"
+    params: list = [source, operation]
     if zones is not None:
         if not zones:
             return 0
@@ -215,6 +230,7 @@ def mark_inactive_after_misses(
     source: str,
     zones: list[str],
     max_misses: int,
+    operation: str = "venta",
 ) -> int:
     """Baja los avisos que llevan `max_misses` corridas seguidas sin aparecer.
 
@@ -232,8 +248,9 @@ def mark_inactive_after_misses(
 
     marcas = ",".join("?" * len(zones))
     filas = conn.execute(
-        f"SELECT id FROM listings WHERE source = ? AND active = 1 AND zone IN ({marcas})",
-        [source, *zones],
+        f"SELECT id FROM listings WHERE source = ? AND operation = ? AND active = 1 "
+        f"AND zone IN ({marcas})",
+        [source, operation, *zones],
     ).fetchall()
 
     conn.executemany(
@@ -245,8 +262,8 @@ def mark_inactive_after_misses(
         [(r["id"],) for r in filas if r["id"] not in seen_ids],
     )
     cursor = conn.execute(
-        f"UPDATE listings SET active = 0 WHERE source = ? AND active = 1 "
-        f"AND zone IN ({marcas}) AND missed_runs >= ?",
-        [source, *zones, max_misses],
+        f"UPDATE listings SET active = 0 WHERE source = ? AND operation = ? "
+        f"AND active = 1 AND zone IN ({marcas}) AND missed_runs >= ?",
+        [source, operation, *zones, max_misses],
     )
     return cursor.rowcount
