@@ -113,6 +113,18 @@ sources:
     # Cloudflare: si empiezan a aparecer más cortes, vaciá la lista.
     extra_orders:
       - "-orden-precio-ascendente"
+    # Sitemap de listados, declarado en el robots.txt del sitio. Hay que
+    # pedirlo con el navegador: por HTTP directo Cloudflare responde 403.
+    # Armando la URL a mano hay una búsqueda por zona; el sitemap ofrece 325
+    # para las diez, entre sub-barrios (bajo-palermo, botanico-palermo,
+    # barrio-parque-palermo), ambientes y atributos (-con-balcon,
+    # -con-apto-credito). Se descartan las que el robots.txt prohíbe aunque
+    # el sitemap las liste. null vuelve a una búsqueda por zona.
+    sitemap: "sitemaps_https.xml"
+    # Mismo criterio que en Argenprop: se rota, porque pedir las 47 de
+    # Palermo de una sola vez son 235 páginas seguidas y Cloudflare corta
+    # mucho antes. Con 6 por corrida, las de Palermo se cubren en 9 días.
+    max_searches_per_zone: 6
     # Cloudflare marca la SESION, no la IP: reusando la misma pestaña corta
     # en la 2da navegación y nos quedamos con 1 página de 5; abriendo una
     # limpia por página entran las cinco. Medido en Palermo: 25 avisos -> 111.

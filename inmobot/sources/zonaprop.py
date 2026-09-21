@@ -14,8 +14,13 @@ import time
 from contextlib import contextmanager
 from typing import Iterator
 
+import tempfile
+from datetime import date
+from pathlib import Path
+
 from ..normalize import slug
 from ._browser import browser_page, is_bot_challenge
+from ._sitemap import descargar_con_navegador, rutas_por_zona_planas
 from ._text import parse_number, parse_price
 
 log = logging.getLogger(__name__)
@@ -70,21 +75,91 @@ class ZonapropSource:
         # haber quedado fuera de la ventana, y eso se resuelve con el tiempo
         # (ver storage.max_missed_runs), no en esta corrida.
         self.capped_zones: set[str] = set()
+        # Sitemap de listados, declarado en el robots.txt del sitio.
+        # Armando la URL a mano se llega a una búsqueda por zona; el
+        # sitemap ofrece 325 para las mismas diez, entre sub-barrios
+        # (bajo-palermo, botanico-palermo), ambientes y atributos.
+        self.sitemap = conf.get("sitemap", "sitemaps_https.xml")
+        self.max_searches_per_zone = int(conf.get("max_searches_per_zone", 6))
+        self._rutas: dict[str, list[str]] | None = None
 
-    def _url(self, property_slug: str, zone: str, page: int, order: str = "") -> str:
-        base = f"{property_slug}-{self.operation_slug}-{slug(zone)}{order}"
+    def _ruta_base(self, property_slug: str, zone: str, order: str = "") -> str:
+        return f"/{property_slug}-{self.operation_slug}-{slug(zone)}{order}.html"
+
+    def _url(self, ruta: str, page: int) -> str:
         if page == 1:
-            return f"{BASE}/{base}.html"
-        return f"{BASE}/{base}-pagina-{page}.html"
+            return BASE + ruta
+        return f"{BASE}{ruta.removesuffix('.html')}-pagina-{page}.html"
+
+    def _paginas_de(self, ruta: str) -> int:
+        """Las páginas que el robots.txt permite pedir de esta búsqueda.
+
+        `Allow: *-orden-precio-ascendente.html` habilita esa URL exacta, no
+        su paginación, así que de las reordenadas sale una sola página.
+        """
+        return 1 if "-orden-" in ruta else self.max_pages
+
+    def _rutas_de(self, zone: str, property_slug: str, zonas: list[str]) -> list[str]:
+        """Las búsquedas a recorrer para esta zona, según el sitemap."""
+        propia = self._ruta_base(property_slug, zone)
+        if not self.sitemap:
+            return [propia] + [
+                self._ruta_base(property_slug, zone, o) for o in self.extra_orders
+            ]
+
+        if self._rutas is None:
+            self._rutas = self._bajar_sitemap(property_slug, zonas)
+
+        resto = [r for r in (self._rutas.get(zone) or []) if r != propia]
+        cupo = self.max_searches_per_zone
+        if not cupo or len(resto) + 1 <= cupo:
+            return [propia] + resto
+
+        # Rotación: la búsqueda del barrio entero va siempre y el resto se
+        # reparte entre corridas, tomando el tramo según el día del año. Es
+        # determinístico y en `len(resto)/(cupo-1)` días se recorren todas.
+        toman = cupo - 1
+        arranque = (date.today().timetuple().tm_yday * toman) % len(resto)
+        log.info(
+            "[zonaprop] %s: %d búsquedas en el sitemap, tomo %d esta corrida.",
+            zone, len(resto) + 1, cupo,
+        )
+        return [propia] + [resto[(arranque + i) % len(resto)] for i in range(toman)]
+
+    def _bajar_sitemap(self, property_slug: str, zonas: list[str]) -> dict[str, list[str]]:
+        carpeta = Path(tempfile.gettempdir()) / "inmobot-sitemaps"
+        try:
+            with browser_page() as page_obj:
+                urls = descargar_con_navegador(f"{BASE}/{self.sitemap}", page_obj, carpeta)
+        except Exception as exc:
+            log.warning("[zonaprop] no pude leer el sitemap: %s", exc)
+            return {}
+
+        rutas = rutas_por_zona_planas(
+            urls, zonas, f"/{property_slug}-{self.operation_slug}-", BASE,
+            # El sitemap lista URLs que el robots.txt igual no deja pedir.
+            prohibidas=("-orden-", "-ubicado-en-"),
+            permitidas=("-orden-precio-ascendente.html",),
+        )
+        log.info(
+            "[zonaprop] el sitemap ofrece %d búsquedas para las zonas "
+            "configuradas (armando la URL a mano sería una por zona).",
+            sum(len(v) for v in rutas.values()),
+        )
+        return rutas
 
     # ---------------------------------------------------------------- #
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        zonas = list(search_cfg.get("zones") or [zone])
         with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
-                if i > 0:
-                    time.sleep(self.delay)
-                yield from self._fetch_property_type(compartida, property_slug, zone)
+                for j, ruta in enumerate(self._rutas_de(zone, property_slug, zonas)):
+                    if i or j:
+                        time.sleep(self.delay)
+                    yield from self._fetch_pages(
+                        compartida, ruta, zone, self._paginas_de(ruta)
+                    )
 
     @contextmanager
     def _sesion(self):
@@ -95,30 +170,18 @@ class ZonapropSource:
             with browser_page() as page_obj:
                 yield page_obj
 
-    def _fetch_property_type(self, page_obj, property_slug: str, zone: str) -> Iterator[dict]:
-        yield from self._fetch_pages(page_obj, property_slug, zone, "", self.max_pages)
-        # Los más baratos primero: es otra lista, no las mismas tarjetas
-        # dadas vuelta, y es justo donde miramos cuando buscamos subvaluados.
-        for order in self.extra_orders:
-            time.sleep(self.delay)
-            yield from self._fetch_pages(page_obj, property_slug, zone, order, 1)
-
     def _fetch_pages(
-        self, page_obj, property_slug: str, zone: str, order: str, max_pages: int
+        self, page_obj, ruta: str, zone: str, max_pages: int
     ) -> Iterator[dict]:
         for page_num in range(1, max_pages + 1):
-            url = self._url(property_slug, zone, page_num, order)
+            url = self._url(ruta, page_num)
             if self.new_session_per_page:
                 # La pestaña se cierra antes de ceder los avisos: si el
                 # consumidor tarda, no dejamos un Chromium abierto de gusto.
                 with browser_page() as propia:
-                    avisos, seguir = self._traer_pagina(
-                        propia, url, property_slug, zone, page_num
-                    )
+                    avisos, seguir = self._traer_pagina(propia, url, ruta, zone, page_num)
             else:
-                avisos, seguir = self._traer_pagina(
-                    page_obj, url, property_slug, zone, page_num
-                )
+                avisos, seguir = self._traer_pagina(page_obj, url, ruta, zone, page_num)
 
             yield from avisos
             if not seguir:
@@ -134,7 +197,7 @@ class ZonapropSource:
         self.capped_zones.add(zone)
 
     def _traer_pagina(
-        self, page_obj, url: str, property_slug: str, zone: str, page_num: int
+        self, page_obj, url: str, ruta: str, zone: str, page_num: int
     ) -> tuple[list[dict], bool]:
         """Los avisos de una página, y si tiene sentido pedir la siguiente."""
         try:
@@ -144,15 +207,12 @@ class ZonapropSource:
             self.incomplete_zones.add(zone)
             if is_bot_challenge(page_obj):
                 log.warning(
-                    "[zonaprop] Cloudflare pidió verificación en %s/%s (pág %d) — "
+                    "[zonaprop] Cloudflare pidió verificación en %s (pág %d) — "
                     "corto acá, no la esquivamos. Quedaron %d página(s).",
-                    property_slug, zone, page_num, page_num - 1,
+                    ruta, page_num, page_num - 1,
                 )
             else:
-                log.info(
-                    "[zonaprop] corto en %s/%s (pág %d): %s",
-                    property_slug, zone, page_num, exc,
-                )
+                log.info("[zonaprop] corto en %s (pág %d): %s", ruta, page_num, exc)
             return [], False
 
         cards = page_obj.query_selector_all(CARD_SELECTOR)

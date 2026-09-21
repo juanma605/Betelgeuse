@@ -62,6 +62,10 @@ def browser_page():
             user_agent=USER_AGENT,
             locale="es-AR",
             viewport={"width": 1366, "height": 900},
+            # Los sitemaps vienen gzipeados y Chromium los trata como
+            # descarga, no como página. Sin esto, pedirlos tira
+            # "Download is starting" y no hay forma de leer el contenido.
+            accept_downloads=True,
         )
         page = context.new_page()
         try:

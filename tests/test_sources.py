@@ -134,10 +134,14 @@ def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     ascendente, que habilitan con un Allow puntual. Estas URLs son las que
     caen del lado permitido: si alguien agrega otro orden al config, que sea
     a sabiendas y no porque el código lo arma solo."""
-    zp = zonaprop.build({"extra_orders": ["-orden-precio-ascendente"]})
-    assert zp._url("departamentos", "Palermo", 1, "-orden-precio-ascendente") == (
+    zp = zonaprop.build({"sitemap": None, "extra_orders": ["-orden-precio-ascendente"]})
+    reordenada = zp._ruta_base("departamentos", "Palermo", "-orden-precio-ascendente")
+    assert zp._url(reordenada, 1) == (
         "https://www.zonaprop.com.ar/departamentos-venta-palermo-orden-precio-ascendente.html"
     )
+    # El Allow cubre esa URL exacta, no su paginación: una sola página.
+    assert zp._paginas_de(reordenada) == 1
+    assert zp._paginas_de(zp._ruta_base("departamentos", "Palermo")) == 5
 
     # Argenprop no permite combinar orden con paginación (`Disallow: /*?*&*`),
     # así que el orden nunca lleva `&pagina-N` pegado.
@@ -147,7 +151,9 @@ def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     assert "&" not in con_orden
 
     # Sin configurar, las URLs son las de siempre.
-    assert zonaprop.build({})._url("departamentos", "Palermo", 2).endswith("-pagina-2.html")
+    assert zonaprop.build({})._url("/departamentos-venta-palermo.html", 2).endswith(
+        "-pagina-2.html"
+    )
     assert argenprop.build({})._url("/departamentos/venta/palermo", 2).endswith("?pagina-2")
 
 
@@ -351,11 +357,14 @@ def test_una_fuente_que_no_puede_agotar_la_zona_no_da_de_baja_nada():
     """
     card = card_from("zonaprop_card.html", "[data-posting-type]")
     source = zonaprop.build(
-        # sin rate limit: el test no pide nada por red
-        {"new_session_per_page": False, "max_pages": 5, "rate_limit_seconds": 0}
+        # sin rate limit ni sitemap: el test no pide nada por red
+        {"new_session_per_page": False, "max_pages": 5, "rate_limit_seconds": 0,
+         "sitemap": None}
     )
 
-    avisos = list(source._fetch_pages(_PaginaLlena(card), "departamentos", "Palermo", "", 5))
+    avisos = list(
+        source._fetch_pages(_PaginaLlena(card), "/departamentos-venta-palermo.html", "Palermo", 5)
+    )
 
     assert len(avisos) == 5                    # una tarjeta por página
     # La zona no está "rota": se leyó bien, hasta donde el robots.txt deja.

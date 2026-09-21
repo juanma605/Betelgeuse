@@ -161,8 +161,20 @@ la región, así que para alquiler o para GBA hay que cambiarlo; con `null` se
 vuelve a una sola búsqueda por zona. Si el sitemap no responde, el scrape
 sigue con esa búsqueda única en vez de cortar.
 
-Zonaprop también declara sitemaps, pero los sirve con 403 por HTTP directo:
-habría que pedirlos con Playwright, y queda pendiente.
+Zonaprop hace lo mismo y en más escala, solo que hay que ir a buscarlo: sus
+sitemaps dan 403 por HTTP directo y también por la API de red del navegador
+—el WAF distingue la navegación de la petición de fondo— así que se navega al
+archivo y se lo toma como descarga, porque vienen gzipeados. De ahí salen 325
+búsquedas para las mismas diez zonas, con sub-barrios (`bajo-palermo`,
+`botanico-palermo`, `barrio-parque-palermo`), ambientes y atributos
+(`-con-balcon`, `-con-apto-credito`). **Palermo pasó de 111 avisos a 610.**
+
+Dos cuidados ahí. El sitemap de Zonaprop es nacional, y `belgrano-rosario` es
+el Belgrano de Rosario: por eso la zona tiene que caer al *final* del lugar y
+no en cualquier parte, con una excepción para el sub-barrio seguido de su
+barrio padre (`belgrano-r-belgrano`). Y el sitemap lista URLs que el propio
+`robots.txt` no deja pedir —todos los `-orden-*` menos
+`-orden-precio-ascendente`— así que se filtran: manda el `robots.txt`.
 
 ## Lo que no es una oferta
 
