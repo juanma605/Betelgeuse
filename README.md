@@ -124,6 +124,29 @@ scraper no explota — sigue corriendo y llena la base de nulls, que es la forma
 en que estos proyectos se rompen sin que nadie se entere. Ya pasó: Argenprop
 sacó el elemento con el barrio y el fixture lo destapó.
 
+## Dar de baja un aviso: solo si vimos toda la zona
+
+Un aviso que deja de aparecer suele haberse vendido, y darlo de baja es lo
+que mantiene la base limpia. Pero eso vale solo si llegamos al final de la
+lista. Remax es la única fuente que puede: su `robots.txt` no pone tope y se
+pagina hasta que la lista vuelve vacía. Las otras cuatro tienen tope — 5
+páginas en Zonaprop, 3 en Argenprop, 1 en MercadoLibre, ninguna en Mudafy —
+y de los 5.793 avisos que ML tiene en Palermo vemos 48.
+
+Ahí "no apareció" no significa "se vendió", significa "quedó fuera de las
+páginas que nos dejan mirar", y bajarlo mata avisos vivos. Esas zonas se
+marcan incompletas y no se da de baja nada en ellas.
+
+Pasó de verdad: el 21/09, al arreglar los cortes de Cloudflare, las zonas de
+Zonaprop dejaron de estar incompletas por primera vez y se dieron de baja
+815 avisos de una corrida. Los cuatro que se revisaron a mano seguían
+publicados. El bug existía desde siempre, tapado por los bloqueos.
+
+El costo es el inverso: en esas cuatro fuentes un aviso vendido se queda
+activo. Se nota en los links caídos y lo acota `stale_days`, que saca de las
+medianas lo publicado hace mucho. La salida prolija sería darlos de baja
+después de N corridas sin verlos, y está pendiente.
+
 ## Qué es configurable
 
 Todo lo que cambia entre búsquedas está en `config.yaml`, no en el código:

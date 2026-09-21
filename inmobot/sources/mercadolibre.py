@@ -92,6 +92,12 @@ class MercadoLibreSource:
             log.warning("[mercadolibre] 0 avisos en %s — ¿cambió la página?", zone)
             self.incomplete_zones.add(zone)
             return
+
+        # El robots.txt prohíbe paginar (`Disallow: /*_Desde_`), así que de
+        # los 5.793 avisos que ML tiene en Palermo vemos 48. No hay forma de
+        # saber si un aviso que no apareció se vendió o simplemente quedó
+        # fuera de esa única página, y darlo de baja mata avisos vivos.
+        self.incomplete_zones.add(zone)
         yield from items
 
 

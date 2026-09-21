@@ -318,3 +318,44 @@ def test_remax_lee_los_barrios_del_estado_de_la_pagina():
     assert not remax.busqueda_degradada(remax.geo_labels(state), "Almagro")
     assert remax.busqueda_degradada(remax.geo_labels(state), "Villa Urquiza")
     assert remax.geo_labels("") == []
+
+
+class _PaginaLlena:
+    """Una página que siempre devuelve tarjetas: simula un inventario que no
+    se termina nunca dentro del tope que permite el robots.txt."""
+
+    def __init__(self, card):
+        self._card = card
+
+    def goto(self, *a, **k):
+        return None
+
+    def wait_for_selector(self, *a, **k):
+        return None
+
+    def query_selector_all(self, _sel):
+        return [self._card]
+
+
+def test_una_fuente_que_no_puede_agotar_la_zona_no_da_de_baja_nada():
+    """El 21/09 se dieron de baja 815 avisos de Zonaprop en una sola corrida
+    y los cuatro que se revisaron a mano seguían publicados.
+
+    El robots.txt de Zonaprop permite 5 páginas y Palermo tiene 575: nunca
+    vemos el inventario completo. Mientras Cloudflare cortaba, las zonas
+    quedaban marcadas incompletas y el bug estaba tapado; al arreglar el
+    corte, "no apareció en la corrida" pasó a leerse como "se vendió".
+
+    Quien no puede llegar al final de la lista no tiene derecho a dar de
+    baja por ausencia, y `incomplete_zones` es lo que se lo impide.
+    """
+    card = card_from("zonaprop_card.html", "[data-posting-type]")
+    source = zonaprop.build(
+        # sin rate limit: el test no pide nada por red
+        {"new_session_per_page": False, "max_pages": 5, "rate_limit_seconds": 0}
+    )
+
+    avisos = list(source._fetch_pages(_PaginaLlena(card), "departamentos", "Palermo", "", 5))
+
+    assert len(avisos) == 5                       # una tarjeta por página
+    assert source.incomplete_zones == {"Palermo"}  # y aun así, no vimos todo

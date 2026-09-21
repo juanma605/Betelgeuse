@@ -53,3 +53,4 @@ def test_en_una_zona_completa_los_que_faltan_si_se_dan_de_baja(tmp_path):
         db.mark_inactive(conn, set(belgrano[:40]), "zonaprop", zones=["Belgrano"])
 
         assert activos(conn, "Belgrano") == 40
+

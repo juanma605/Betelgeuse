@@ -113,6 +113,14 @@ class ArgenpropSource:
             if page_num < max_pages:
                 time.sleep(self.delay)
 
+        # Salimos del for sin que la lista se vaciara: llegamos al tope de
+        # páginas del robots.txt y el inventario sigue. No vimos todo, así
+        # que no podemos distinguir "este aviso se vendió" de "este aviso
+        # quedó fuera de las páginas que nos dejan mirar", y dar de baja lo
+        # segundo mata avisos vivos. Ver el log del 21/09: 815 avisos de
+        # Zonaprop dados de baja, y los cuatro que revisé seguían publicados.
+        self.incomplete_zones.add(zone)
+
     def _traer_pagina(
         self, page_obj, url: str, property_slug: str, zone: str, page_num: int
     ) -> tuple[list[dict], bool]:

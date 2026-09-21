@@ -97,6 +97,14 @@ class MudafySource:
 
         coords = coords_by_id(page_obj.content())
         cards = page_obj.query_selector_all(card_selector)
+
+        # Mudafy no pagina (mapa + lista de una sola carga) y su robots.txt
+        # prohíbe cualquier URL con query string: se ven ~25 avisos por zona
+        # y no hay manera de pedir los siguientes. Como no vemos el
+        # inventario completo, no podemos dar de baja por ausencia.
+        if cards:
+            self.incomplete_zones.add(zone)
+
         for card in cards:
             item = self._map(card, zone)
             if item:
