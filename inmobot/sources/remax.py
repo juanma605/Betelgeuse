@@ -29,6 +29,12 @@ MAX_PAGES = 3
 
 CARD_SELECTOR = ".card-remax"
 
+# Lo que Remax muestra cuando te pasaste de la última página. No es un
+# error: es el final de los resultados, y hay que distinguirlo de una
+# carga fallida — si no, agotar una zona la marca como incompleta y sus
+# avisos vendidos no se dan de baja nunca.
+SIN_RESULTADOS = "No hay propiedades que coincidan"
+
 # Angular deja los resultados de la búsqueda serializados en este <script>
 # (transfer state) para no volver a pedirlos en el cliente. Ahí viene la
 # ubicación de cada aviso, que la tarjeta no muestra.
@@ -82,6 +88,12 @@ class RemaxSource:
                     page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
                     page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
                 except Exception as exc:
+                    if self._sin_resultados(page_obj):
+                        log.info(
+                            "[remax] %s: se acabaron los resultados en la pág %d.",
+                            zone, page_num,
+                        )
+                        return
                     self.incomplete_zones.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
@@ -118,6 +130,14 @@ class RemaxSource:
 
                 if page_num < self.max_pages:
                     time.sleep(self.delay)
+
+    @staticmethod
+    def _sin_resultados(page_obj) -> bool:
+        """Distingue "se acabó la lista" de "no cargó"."""
+        try:
+            return SIN_RESULTADOS in page_obj.inner_text("body")
+        except Exception:
+            return False
 
     # ---------------------------------------------------------------- #
 

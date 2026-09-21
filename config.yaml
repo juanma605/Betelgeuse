@@ -140,10 +140,13 @@ sources:
     # ni Crawl-delay, y `?page=N` pagina de verdad (probado hasta la 30: 24
     # avisos distintos cada una, cero repetidos). El tope es nuestro.
     #
-    # 15 páginas = 360 avisos por zona, contra los 1466 que Remax tiene solo
-    # en Palermo. Subirlo más es legítimo pero alarga el scrape: cada página
-    # cuesta los 6 s de rate limit más lo que tarde en renderizar.
-    max_pages: 15
+    # Puesto para agotar la zona más grande (Palermo necesita 62 páginas).
+    # Las chicas cortan solas: el scraper reconoce el "No hay propiedades que
+    # coincidan" del final de la lista y termina sin marcar la zona como
+    # incompleta. Con 15 traíamos 2247 de los 5537 avisos que Remax tiene en
+    # nuestras 8 zonas; agotarlo son ~231 páginas y unos 45 minutos de las
+    # ~70 que pasa a durar el scrape entero.
+    max_pages: 65
 
 # MercadoLibre y Argenprop publican la dirección pero no las coordenadas.
 # Después de cada scrape, esas direcciones se convierten en un punto con el

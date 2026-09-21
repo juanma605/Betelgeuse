@@ -167,6 +167,26 @@ def test_remax_le_pega_la_provincia_al_barrio():
     assert remax.build({})._url("Palermo", 1).endswith("-en-palermo")
 
 
+class _PaginaFalsa:
+    def __init__(self, texto): self._texto = texto
+    def inner_text(self, _sel): return self._texto
+
+
+def test_remax_distingue_el_final_de_la_lista_de_una_carga_fallida():
+    """Al pasarse de la última página, Remax no da 404: muestra "No hay
+    propiedades que coincidan" y el selector de tarjetas nunca aparece, o
+    sea la misma excepción que una carga fallida. Confundirlos marca la zona
+    como incompleta y sus avisos vendidos no se dan de baja nunca."""
+    source = remax.build({})
+    assert source._sin_resultados(_PaginaFalsa("No hay propiedades que coincidan con tu búsqueda"))
+    assert not source._sin_resultados(_PaginaFalsa("Verificación de seguridad en curso"))
+
+    # Si la página ni siquiera se deja leer, es una falla, no un final.
+    class Rota:
+        def inner_text(self, _sel): raise RuntimeError("sin página")
+    assert not source._sin_resultados(Rota())
+
+
 def test_remax_se_da_cuenta_cuando_le_devuelven_otra_busqueda():
     """El fallo que nos metió 148 avisos de Allen, San Jerónimo y Mar del
     Plata en la base: Remax no responde 404 ante un barrio que no conoce
