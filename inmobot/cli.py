@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import alerts, analyze, db, demo, geocode, normalize
+from . import alerts, analyze, db, demo, geocode, normalize, yields
 from .config import DEFAULTS
 from .config import load as load_config
 from .sources import argenprop, mercadolibre, mudafy, remax, zonaprop
@@ -192,6 +192,59 @@ def cmd_scrape(cfg) -> None:
     )
 
 
+def cmd_yields(cfg) -> None:
+    """Cuánto rinde comprar, cruzando venta contra alquiler del mismo edificio."""
+    ruta_alquileres = Path(cfg.get_path("storage.rentals_path", "data/rentals.db"))
+    if not ruta_alquileres.exists():
+        log.error(
+            "No hay base de alquileres en %s. Corré primero: "
+            "    python -m inmobot scrape --config config-alquiler.yaml",
+            ruta_alquileres,
+        )
+        return
+
+    min_avisos = int(cfg.get_path("analysis.yields_min_avisos", 1))
+    with db.connect(cfg.get_path("storage.path"), readonly=True) as ventas, \
+         db.connect(ruta_alquileres, readonly=True) as alquileres:
+        tabla = yields.rental_yields(ventas, alquileres, min_avisos=min_avisos)
+
+    if tabla.empty:
+        log.info(
+            "Ningún edificio tiene venta y alquiler a la vez todavía. Dos avisos "
+            "son del mismo edificio cuando su dirección geocodifica al mismo "
+            "punto, así que hace falta que las direcciones estén geocodificadas "
+            "en las dos bases."
+        )
+        return
+
+    print(f"\n=== Rendimiento bruto anual ({len(tabla)} edificios) ===")
+    print(
+        "Alquiler anual sobre precio de venta, comparando por m². No descuenta "
+        "expensas, impuestos, vacancia ni comisión: sirve para comparar "
+        "edificios entre sí, no como el número de bolsillo.\n"
+    )
+    vista = tabla.assign(
+        direccion=tabla["address"].str.slice(0, 34),
+        venta_m2=tabla["venta_por_m2"].round(0),
+        alq_m2=tabla["alquiler_por_m2"].round(0),
+        rinde_pct=tabla["rendimiento_pct"].round(1),
+        años=tabla["años_para_pagarlo"].round(1),
+    )
+    columnas = ["direccion", "venta_m2", "alq_m2", "rinde_pct", "años",
+                "venta_avisos", "alquiler_avisos"]
+    print(vista[columnas].head(25).to_string(index=False))
+    print(
+        f"\nmediana {tabla['rendimiento_pct'].median():.1f}%  |  "
+        f"mínimo {tabla['rendimiento_pct'].min():.1f}%  |  "
+        f"máximo {tabla['rendimiento_pct'].max():.1f}%"
+    )
+    print(
+        "\nMirá `venta_avisos` y `alquiler_avisos` antes de creerle a un número: "
+        "un edificio con uno de cada lado es el capricho de dos publicaciones, "
+        "no el rendimiento del edificio."
+    )
+
+
 def cmd_analyze(cfg, export_dir: Path | None = None, use_demo: bool = False) -> None:
     acfg = cfg["analysis"]
 
@@ -284,7 +337,10 @@ def cmd_demo_export(cfg, out: str, limit: int | None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="inmobot")
-    parser.add_argument("command", choices=["scrape", "analyze", "export", "demo-export"])
+    parser.add_argument(
+        "command",
+        choices=["scrape", "analyze", "yields", "export", "demo-export"],
+    )
     parser.add_argument("-c", "--config", default="config.yaml")
     parser.add_argument("-o", "--out", default=None)
     parser.add_argument(
@@ -312,6 +368,8 @@ def main() -> None:
             cmd_scrape(cfg)
         elif args.command == "analyze":
             cmd_analyze(cfg, use_demo=args.demo)
+        elif args.command == "yields":
+            cmd_yields(cfg)
         elif args.command == "demo-export":
             cmd_demo_export(cfg, args.out or demo.DEMO_DB_PATH, args.limit)
         else:

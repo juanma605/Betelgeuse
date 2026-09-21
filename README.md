@@ -49,6 +49,38 @@ Es determinístico (dos corridas sobre la misma base dan el mismo archivo) y
 muestrea estratificado por zona, conservando enteros los grupos
 zona/ambientes: un demo sesgado a un solo barrio no mostraría nada.
 
+## Cuánto rinde comprar
+
+```bash
+python -m inmobot scrape --config config-alquiler.yaml   # -> data/rentals.db
+python -m inmobot yields
+```
+
+La pregunta no es cuánto sale un departamento sino qué relación hay entre lo
+que sale y lo que rinde. Un 2 ambientes de 150.000 USD que se alquila a 600
+por mes rinde 4,8% anual; el mismo precio con un alquiler de 400 rinde 3,2%.
+Ningún portal cruza las dos cosas, porque cada aviso vive en su propia
+búsqueda.
+
+Los alquileres van a **su propia base**, con su propio config: una corrida no
+toca la otra, y conviene correrlas en horarios distintos.
+
+Dos avisos son del mismo edificio cuando su dirección geocodifica al mismo
+punto. No se usa proximidad: con 10.000 avisos en diez barrios, dos
+departamentos a 40 metros son vecinos casi con seguridad y no la misma torre,
+y las coordenadas que publican Remax y Mudafy son aproximadas. Eso deja el
+cruce sobre la parte de la base que publica calle y altura.
+
+La comparación es **por m²** y no por tipología: casi nunca hay venta y
+alquiler de la misma cantidad de ambientes en el mismo edificio, así que un
+monoambiente en alquiler sirve para medir un 3 ambientes en venta.
+
+El rendimiento es **bruto** — alquiler anual sobre precio de venta, sin
+descontar expensas, impuestos, vacancia ni comisión. Sirve para comparar
+edificios entre sí; el número de bolsillo es más bajo. Mirá `venta_avisos` y
+`alquiler_avisos` antes de creerle a una fila: un edificio con uno de cada
+lado es el capricho de dos publicaciones.
+
 ## Instalación
 
 ```bash

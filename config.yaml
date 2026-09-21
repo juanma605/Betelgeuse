@@ -236,6 +236,9 @@ scrape:
 
 storage:
   path: "data/listings.db"
+  # Los alquileres viven en su propia base, que llena
+  # `scrape --config config-alquiler.yaml`. `yields` cruza las dos.
+  rentals_path: "data/rentals.db"
   # Cada corrida guarda un snapshot de precio por aviso. Esto es lo que
   # construye el historial que ningún portal te muestra.
   keep_snapshots: true
