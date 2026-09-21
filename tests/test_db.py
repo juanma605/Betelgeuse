@@ -54,3 +54,66 @@ def test_en_una_zona_completa_los_que_faltan_si_se_dan_de_baja(tmp_path):
 
         assert activos(conn, "Belgrano") == 40
 
+
+
+def test_en_zona_con_tope_el_aviso_aguanta_siete_corridas(tmp_path):
+    """Las fuentes que no llegan al final de la lista no pueden leer una
+    ausencia como una venta: el robots.txt de Zonaprop deja ver 5 páginas de
+    las 575 que tiene Palermo, y ese orden se mueve solo. El 21/09 eso dio
+    de baja 815 avisos que seguían publicados.
+
+    Pero tampoco puede ser que un vendido quede activo para siempre. Siete
+    corridas seguidas sin aparecer ya no son mala suerte del orden.
+    """
+    with db.connect(tmp_path / "t.db") as conn:
+        avisos = poblar(conn, "Palermo", 3)
+        siempre, intermitente, vendido = avisos
+
+        for corrida in range(1, 7):
+            # El intermitente entra y sale del top-150 según el orden del día.
+            vistos = {siempre} | ({intermitente} if corrida % 2 else set())
+            bajas = db.mark_inactive_after_misses(
+                conn, vistos, "zonaprop", ["Palermo"], max_misses=7
+            )
+            assert bajas == 0, f"nadie se baja en la corrida {corrida}"
+            assert activos(conn, "Palermo") == 3
+
+        # Séptima ausencia seguida del que nunca volvió: ese sí se baja.
+        bajas = db.mark_inactive_after_misses(
+            conn, {siempre, intermitente}, "zonaprop", ["Palermo"], max_misses=7
+        )
+        assert bajas == 1
+        vivos = {r[0] for r in conn.execute("SELECT id FROM listings WHERE active = 1")}
+        assert vivos == {siempre, intermitente}
+        assert vendido not in vivos
+
+
+def test_el_contador_se_reinicia_cuando_el_aviso_reaparece(tmp_path):
+    """Un aviso que rota dentro y fuera de la ventana no acumula nunca: si
+    no, bastaría con perderlo salteado siete veces para matarlo."""
+    with db.connect(tmp_path / "t.db") as conn:
+        (aviso,) = poblar(conn, "Palermo", 1)
+
+        for _ in range(6):
+            db.mark_inactive_after_misses(conn, set(), "zonaprop", ["Palermo"], 7)
+        assert activos(conn, "Palermo") == 1
+
+        db.mark_inactive_after_misses(conn, {aviso}, "zonaprop", ["Palermo"], 7)
+        contador = conn.execute(
+            "SELECT missed_runs FROM listings WHERE id = ?", (aviso,)
+        ).fetchone()[0]
+        assert contador == 0
+
+        # Y desde cero le vuelven a hacer falta las siete.
+        for _ in range(6):
+            db.mark_inactive_after_misses(conn, set(), "zonaprop", ["Palermo"], 7)
+        assert activos(conn, "Palermo") == 1
+
+
+def test_con_max_misses_en_cero_no_se_da_de_baja_nunca(tmp_path):
+    """El interruptor del config para volver al comportamiento conservador."""
+    with db.connect(tmp_path / "t.db") as conn:
+        poblar(conn, "Palermo", 2)
+        for _ in range(20):
+            assert db.mark_inactive_after_misses(conn, set(), "zonaprop", ["Palermo"], 0) == 0
+        assert activos(conn, "Palermo") == 2

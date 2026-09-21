@@ -142,10 +142,12 @@ Zonaprop dejaron de estar incompletas por primera vez y se dieron de baja
 815 avisos de una corrida. Los cuatro que se revisaron a mano seguían
 publicados. El bug existía desde siempre, tapado por los bloqueos.
 
-El costo es el inverso: en esas cuatro fuentes un aviso vendido se queda
-activo. Se nota en los links caídos y lo acota `stale_days`, que saca de las
-medianas lo publicado hace mucho. La salida prolija sería darlos de baja
-después de N corridas sin verlos, y está pendiente.
+Pero tampoco puede ser que un vendido quede activo para siempre, así que
+ahí la baja es paciente: se cuenta cuántas corridas seguidas no apareció el
+aviso y recién a las `storage.max_missed_runs` (7 por defecto, o sea una
+semana de cron diario) se lo da de baja. El contador se reinicia apenas
+vuelve a verse, así que un listado que rota no lo acumula nunca. Con 0 no se
+da de baja nada en esas fuentes.
 
 ## Qué es configurable
 

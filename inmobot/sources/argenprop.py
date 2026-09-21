@@ -55,6 +55,9 @@ class ArgenpropSource:
         # evita que el challenge se dispare. Ver README.
         self.new_session_per_page = bool(conf.get("new_session_per_page", True))
         self.incomplete_zones: set[str] = set()
+        # Ver el comentario en zonaprop.py: leída hasta el tope del
+        # robots.txt, con inventario por delante.
+        self.capped_zones: set[str] = set()
 
     def _url(self, property_slug: str, zone: str, page: int, order: str = "") -> str:
         url = f"{BASE}/{property_slug}/{self.operation_slug}/{slug(zone)}"
@@ -114,12 +117,11 @@ class ArgenpropSource:
                 time.sleep(self.delay)
 
         # Salimos del for sin que la lista se vaciara: llegamos al tope de
-        # páginas del robots.txt y el inventario sigue. No vimos todo, así
-        # que no podemos distinguir "este aviso se vendió" de "este aviso
-        # quedó fuera de las páginas que nos dejan mirar", y dar de baja lo
-        # segundo mata avisos vivos. Ver el log del 21/09: 815 avisos de
-        # Zonaprop dados de baja, y los cuatro que revisé seguían publicados.
-        self.incomplete_zones.add(zone)
+        # páginas del robots.txt y el inventario sigue. Lo que trajimos es
+        # bueno; lo que no sabemos es qué hay más allá, así que un aviso
+        # ausente tanto puede haberse vendido como haber quedado fuera de la
+        # ventana. Se decide con el tiempo, no acá.
+        self.capped_zones.add(zone)
 
     def _traer_pagina(
         self, page_obj, url: str, property_slug: str, zone: str, page_num: int

@@ -53,6 +53,9 @@ class RemaxSource:
         self.zone_suffix = conf.get("zone_suffix", "")
         self.page_size = int(conf.get("page_size", 100))
         self.incomplete_zones: set[str] = set()
+        # Ver el comentario en zonaprop.py: leída hasta el tope del
+        # robots.txt, con inventario por delante.
+        self.capped_zones: set[str] = set()
 
     def _url(self, zone: str, page: int) -> str:
         """URL de búsqueda de una zona.
@@ -129,6 +132,13 @@ class RemaxSource:
 
                 if page_num < self.max_pages:
                     time.sleep(self.delay)
+
+            # Salimos del for con la lista todavía llena: el tope de páginas
+            # es nuestro, pero igual no llegamos al final. Hoy no pasa
+            # (25 páginas x 100 son 2500 avisos y Palermo tiene 1456), pero
+            # si Remax crece, esta zona deja de tener derecho a dar de baja
+            # por ausencia hasta que se la pueda agotar de nuevo.
+            self.capped_zones.add(zone)
 
     # ---------------------------------------------------------------- #
 

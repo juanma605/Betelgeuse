@@ -55,6 +55,9 @@ class MercadoLibreSource:
         self.region_slug = conf.get("region_slug", "capital-federal")
         self.delay = float(conf.get("rate_limit_seconds", 8.0))
         self.incomplete_zones: set[str] = set()
+        # Ver el comentario en zonaprop.py: leída hasta el tope del
+        # robots.txt, con inventario por delante.
+        self.capped_zones: set[str] = set()
         self._last_request = 0.0
         self.client = httpx.Client(
             headers={"User-Agent": USER_AGENT, "Accept-Language": "es-AR,es;q=0.9"},
@@ -94,10 +97,10 @@ class MercadoLibreSource:
             return
 
         # El robots.txt prohíbe paginar (`Disallow: /*_Desde_`), así que de
-        # los 5.793 avisos que ML tiene en Palermo vemos 48. No hay forma de
-        # saber si un aviso que no apareció se vendió o simplemente quedó
-        # fuera de esa única página, y darlo de baja mata avisos vivos.
-        self.incomplete_zones.add(zone)
+        # los 5.793 avisos que ML tiene en Palermo vemos 48. Un aviso que no
+        # aparece tanto puede haberse vendido como haber quedado fuera de esa
+        # única página: se decide con el tiempo.
+        self.capped_zones.add(zone)
         yield from items
 
 

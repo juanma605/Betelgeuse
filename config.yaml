@@ -185,6 +185,16 @@ storage:
   # construye el historial que ningún portal te muestra.
   keep_snapshots: true
 
+  # Corridas seguidas sin ver un aviso antes de darlo de baja, en las
+  # fuentes que no pueden leer la zona entera (todas menos Remax). Ahí una
+  # sola ausencia no prueba nada: el robots.txt nos deja ver 5 páginas de
+  # las 575 que tiene Palermo en Zonaprop, y ese orden se mueve solo. Pero
+  # siete corridas seguidas sin aparecer ya no son mala suerte del orden.
+  # El contador se reinicia apenas el aviso vuelve a verse.
+  # Con el cron diario, son siete días. Ponelo en 0 para no dar de baja
+  # nunca en esas fuentes.
+  max_missed_runs: 7
+
 dedup:
   enabled: true
   # Dos avisos se consideran el mismo inmueble si coinciden en zona,

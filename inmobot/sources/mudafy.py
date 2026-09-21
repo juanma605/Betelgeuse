@@ -54,6 +54,9 @@ class MudafySource:
         self.zone_prefix = conf.get("zone_prefix", "caba-")
         self.delay = float(conf.get("rate_limit_seconds", 4.0))
         self.incomplete_zones: set[str] = set()
+        # Ver el comentario en zonaprop.py: leída hasta el tope del
+        # robots.txt, con inventario por delante.
+        self.capped_zones: set[str] = set()
 
     def _url(self, property_slug: str, zone: str) -> str:
         return (
@@ -100,10 +103,9 @@ class MudafySource:
 
         # Mudafy no pagina (mapa + lista de una sola carga) y su robots.txt
         # prohíbe cualquier URL con query string: se ven ~25 avisos por zona
-        # y no hay manera de pedir los siguientes. Como no vemos el
-        # inventario completo, no podemos dar de baja por ausencia.
+        # y no hay manera de pedir los siguientes.
         if cards:
-            self.incomplete_zones.add(zone)
+            self.capped_zones.add(zone)
 
         for card in cards:
             item = self._map(card, zone)

@@ -63,6 +63,13 @@ class ZonapropSource:
         # error de red) — el caller no debe dar de baja avisos ahí solo
         # porque no aparecieron en esta corrida incompleta.
         self.incomplete_zones: set[str] = set()
+        # Zonas que se leyeron bien pero hasta el tope que permite el
+        # robots.txt, con inventario todavía por delante. Distinto de las
+        # incompletas: acá el dato que trajimos es bueno, lo que no sabemos
+        # es qué hay más allá. Un aviso ausente puede haberse vendido o
+        # haber quedado fuera de la ventana, y eso se resuelve con el tiempo
+        # (ver storage.max_missed_runs), no en esta corrida.
+        self.capped_zones: set[str] = set()
 
     def _url(self, property_slug: str, zone: str, page: int, order: str = "") -> str:
         base = f"{property_slug}-{self.operation_slug}-{slug(zone)}{order}"
@@ -120,12 +127,11 @@ class ZonapropSource:
                 time.sleep(self.delay)
 
         # Salimos del for sin que la lista se vaciara: llegamos al tope de
-        # páginas del robots.txt y el inventario sigue. No vimos todo, así
-        # que no podemos distinguir "este aviso se vendió" de "este aviso
-        # quedó fuera de las páginas que nos dejan mirar", y dar de baja lo
-        # segundo mata avisos vivos. Ver el log del 21/09: 815 avisos de
-        # Zonaprop dados de baja, y los cuatro que revisé seguían publicados.
-        self.incomplete_zones.add(zone)
+        # páginas del robots.txt y el inventario sigue. Lo que trajimos es
+        # bueno; lo que no sabemos es qué hay más allá, así que un aviso
+        # ausente tanto puede haberse vendido como haber quedado fuera de la
+        # ventana. Se decide con el tiempo, no acá.
+        self.capped_zones.add(zone)
 
     def _traer_pagina(
         self, page_obj, url: str, property_slug: str, zone: str, page_num: int

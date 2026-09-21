@@ -104,7 +104,7 @@ def _agregar_columnas_nuevas(conn: sqlite3.Connection) -> None:
     """CREATE TABLE IF NOT EXISTS no agrega columnas a una tabla que ya existe:
     sin esto, una base vieja se rompe al insertar una columna nueva."""
     existentes = {fila["name"] for fila in conn.execute("PRAGMA table_info(listings)")}
-    for columna, tipo in (("address", "TEXT"),):
+    for columna, tipo in (("address", "TEXT"), ("missed_runs", "INTEGER DEFAULT 0")):
         if columna not in existentes:
             conn.execute(f"ALTER TABLE listings ADD COLUMN {columna} {tipo}")
 
@@ -183,3 +183,46 @@ def mark_inactive(
     gone = [r["id"] for r in rows if r["id"] not in seen_ids]
     conn.executemany("UPDATE listings SET active = 0 WHERE id = ?", [(g,) for g in gone])
     return len(gone)
+
+
+def mark_inactive_after_misses(
+    conn: sqlite3.Connection,
+    seen_ids: set[str],
+    source: str,
+    zones: list[str],
+    max_misses: int,
+) -> int:
+    """Baja los avisos que llevan `max_misses` corridas seguidas sin aparecer.
+
+    Es la versión paciente de `mark_inactive`, para las fuentes que no pueden
+    ver la zona entera. Ahí una sola ausencia no prueba nada: el aviso pudo
+    haberse vendido, o haber quedado fuera de las páginas que el robots.txt
+    nos deja mirar, y el orden de esas páginas se mueve solo. Pero un aviso
+    que no aparece en siete corridas seguidas ya no es mala suerte del orden.
+
+    El contador se reinicia apenas el aviso vuelve a verse, así que un
+    listado que rota no lo acumula nunca.
+    """
+    if not zones or max_misses <= 0:
+        return 0
+
+    marcas = ",".join("?" * len(zones))
+    filas = conn.execute(
+        f"SELECT id FROM listings WHERE source = ? AND active = 1 AND zone IN ({marcas})",
+        [source, *zones],
+    ).fetchall()
+
+    conn.executemany(
+        "UPDATE listings SET missed_runs = 0 WHERE id = ?",
+        [(r["id"],) for r in filas if r["id"] in seen_ids],
+    )
+    conn.executemany(
+        "UPDATE listings SET missed_runs = COALESCE(missed_runs, 0) + 1 WHERE id = ?",
+        [(r["id"],) for r in filas if r["id"] not in seen_ids],
+    )
+    cursor = conn.execute(
+        f"UPDATE listings SET active = 0 WHERE source = ? AND active = 1 "
+        f"AND zone IN ({marcas}) AND missed_runs >= ?",
+        [source, *zones, max_misses],
+    )
+    return cursor.rowcount

@@ -357,5 +357,9 @@ def test_una_fuente_que_no_puede_agotar_la_zona_no_da_de_baja_nada():
 
     avisos = list(source._fetch_pages(_PaginaLlena(card), "departamentos", "Palermo", "", 5))
 
-    assert len(avisos) == 5                       # una tarjeta por página
-    assert source.incomplete_zones == {"Palermo"}  # y aun así, no vimos todo
+    assert len(avisos) == 5                    # una tarjeta por página
+    # La zona no está "rota": se leyó bien, hasta donde el robots.txt deja.
+    # Esa diferencia es la que decide si un aviso ausente se da de baja ya
+    # (nunca acá) o recién tras storage.max_missed_runs corridas.
+    assert source.capped_zones == {"Palermo"}
+    assert source.incomplete_zones == set()
