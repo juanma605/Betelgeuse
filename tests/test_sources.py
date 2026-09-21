@@ -12,6 +12,7 @@ from fake_dom import FIXTURES, card_from
 
 from inmobot import db
 from inmobot.sources import argenprop, mercadolibre, mudafy, remax, zonaprop
+from inmobot.sources._browser import is_bot_challenge
 from inmobot.sources._text import parse_number
 
 # `address` no está en el esquema (db.upsert_listings lo descarta) pero dos
@@ -273,3 +274,18 @@ def test_mercadolibre_no_confunde_m2_totales_con_cubiertos():
     # "70 m²" a secas no se toma como cubierto: va a total_area, así
     # load_active lo marca como área estimada y no entra a las medianas.
     assert (sin_calificar.get("covered_area"), sin_calificar["total_area"]) == (None, 70)
+
+
+def test_reconoce_el_cartel_de_cloudflare_en_los_dos_idiomas():
+    """Cloudflare le sirve a Argenprop la pantalla en inglés, y por eso sus
+    bloqueos venían apareciendo en el log como `Timeout 10000ms exceeded`.
+    Un scraper que parece lento cuando en realidad lo están frenando es la
+    peor forma de fallar: se arregla lo que no está roto."""
+    class Pagina:
+        def __init__(self, titulo, cuerpo): self._t, self._c = titulo, cuerpo
+        def title(self): return self._t
+        def inner_text(self, _sel): return self._c
+
+    assert is_bot_challenge(Pagina("Un momento...", "Verificación de seguridad en curso"))
+    assert is_bot_challenge(Pagina("Just a moment...", "Let's confirm you are human"))
+    assert not is_bot_challenge(Pagina("Departamentos en venta en Palermo", "20 resultados"))

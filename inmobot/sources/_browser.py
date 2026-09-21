@@ -15,8 +15,21 @@ USER_AGENT = (
 )
 
 
+# Cloudflare no siempre sirve la pantalla en español: Argenprop la devuelve
+# en inglés y así estuvo pasando por un timeout genérico en el log, que es
+# la peor forma de fallar — el scraper parecía lento cuando en realidad lo
+# estaban frenando.
+_CHALLENGE_BODY = (
+    "verificación de seguridad",
+    "confirm you are human",
+    "security check",
+    "verifying you are human",
+)
+_CHALLENGE_TITLE = ("un momento", "just a moment", "attention required")
+
+
 def is_bot_challenge(page) -> bool:
-    """Detecta la pantalla de verificación de Cloudflare ("Un momento...").
+    """Detecta la pantalla de verificación de Cloudflare.
 
     Zonaprop y Argenprop la disparan típicamente a partir de la 2da
     navegación dentro de la misma sesión headless, incluso respetando el
@@ -29,7 +42,8 @@ def is_bot_challenge(page) -> bool:
         body = page.inner_text("body")[:500].lower()
     except Exception:
         return False
-    return "verificación de seguridad" in body or "un momento" in title
+    return (any(t in body for t in _CHALLENGE_BODY)
+            or any(t in title for t in _CHALLENGE_TITLE))
 
 
 @contextmanager
