@@ -89,6 +89,12 @@ def geocodificar(direccion: str, client: httpx.Client) -> tuple[float, float] | 
     return (lat, lon) if en_caba(lat, lon) else None
 
 
+# Cada cuántas consultas se guarda el avance. Con 25 se pierde medio
+# minuto de trabajo en el peor caso, que es barato frente a commitear en cada
+# vuelta.
+CADA_CUANTO_GUARDA = 25
+
+
 def completar_coordenadas(conn: sqlite3.Connection, cfg: dict, client=None) -> dict:
     """Geocodifica los avisos activos con dirección y sin coordenadas."""
     pendientes = conn.execute(
@@ -128,6 +134,13 @@ def completar_coordenadas(conn: sqlite3.Connection, cfg: dict, client=None) -> d
                     (direccion, cache[direccion][0], cache[direccion][1],
                      datetime.now(timezone.utc).isoformat(timespec="seconds")),
                 )
+                # Commit cada tanto y no solo al final: una corrida de
+                # miles de direcciones son 40 minutos, y si el proceso se
+                # corta antes (se cierra la laptop, se reinicia la máquina)
+                # todo lo consultado se perdía y había que volver a
+                # preguntárselo al normalizador desde cero.
+                if stats["consultadas"] % CADA_CUANTO_GUARDA == 0:
+                    conn.commit()
                 time.sleep(espera)
 
             lat, lon = cache[direccion]
@@ -138,6 +151,7 @@ def completar_coordenadas(conn: sqlite3.Connection, cfg: dict, client=None) -> d
                 )
                 stats["ubicados"] += 1
     finally:
+        conn.commit()
         if propio:
             client.close()
 
