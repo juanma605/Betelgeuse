@@ -190,3 +190,37 @@ def test_un_aviso_sin_operacion_declarada_es_una_venta(tmp_path):
              "price_norm": 100_000},
         ])
         assert conn.execute("SELECT operation FROM listings").fetchone()[0] == "venta"
+
+
+def test_base_vieja_sin_columna_operation_se_migra(tmp_path):
+    """Una base creada antes de la columna `operation` tiene que poder abrirse.
+
+    Es el caso real de `data/listings.db`: el índice sobre `operation` vivía
+    en el SCHEMA, que corre antes de la migración, así que abrirla fallaba con
+    `no such column: operation` y se caían el scrape y el geocode.
+    """
+    path = tmp_path / "vieja.db"
+    vieja = sqlite3.connect(path)
+    vieja.executescript(
+        """CREATE TABLE listings (
+               id TEXT PRIMARY KEY, source TEXT NOT NULL, source_id TEXT NOT NULL,
+               url TEXT, title TEXT, zone TEXT, price_norm REAL,
+               fingerprint TEXT,
+               first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+               active INTEGER NOT NULL DEFAULT 1
+           );"""
+    )
+    vieja.commit()
+    vieja.close()
+
+    with db.connect(path) as conn:
+        columnas = {f["name"] for f in conn.execute("PRAGMA table_info(listings)")}
+        indices = {
+            r["name"]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            )
+        }
+
+    assert "operation" in columnas
+    assert "idx_listings_operation" in indices

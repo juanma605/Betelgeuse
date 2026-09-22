@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE INDEX IF NOT EXISTS idx_listings_zone        ON listings(zone);
 CREATE INDEX IF NOT EXISTS idx_listings_fingerprint ON listings(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_listings_active      ON listings(active);
-CREATE INDEX IF NOT EXISTS idx_listings_operation   ON listings(operation);
 
 CREATE TABLE IF NOT EXISTS price_snapshots (
     listing_id  TEXT NOT NULL,
@@ -74,6 +73,15 @@ CREATE TABLE IF NOT EXISTS geocode_cache (
     tried_at  TEXT NOT NULL
 );
 """
+
+# Estos van aparte del SCHEMA porque son sobre columnas que las bases
+# viejas no tienen: el script de arriba corre antes de la migración, así que
+# un índice sobre `operation` ahí rompe la base que todavía no la agregó
+# (`sqlite3.OperationalError: no such column: operation`). Se crean recién
+# después de `_agregar_columnas_nuevas`.
+INDICES_DE_COLUMNAS_MIGRADAS = (
+    "CREATE INDEX IF NOT EXISTS idx_listings_operation ON listings(operation)",
+)
 
 UPSERT_FIELDS = [
     "id", "source", "source_id", "operation", "url", "title", "zone", "neighborhood", "city", "address",
@@ -120,6 +128,8 @@ def connect(path: str | Path, readonly: bool = False) -> Iterator[sqlite3.Connec
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
         _agregar_columnas_nuevas(conn)
+        for sentencia in INDICES_DE_COLUMNAS_MIGRADAS:
+            conn.execute(sentencia)
         yield conn
         conn.commit()
     finally:
