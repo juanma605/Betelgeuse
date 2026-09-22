@@ -82,6 +82,14 @@ class ZonapropSource:
         self.sitemap = conf.get("sitemap", "sitemaps_https.xml")
         self.max_searches_per_zone = int(conf.get("max_searches_per_zone", 6))
         self._rutas: dict[str, list[str]] | None = None
+        # Lo que la tarjeta pone después de la coma ("Belgrano C, Belgrano",
+        # "Palermo, Capital Federal") en las búsquedas propias de cada zona.
+        # Es la referencia para validar las rutas del sitemap: desde el slug
+        # no se distingue `villa-general-belgrano` (Córdoba) de
+        # `barrancas-de-belgrano`, pero la tarjeta de la primera dice
+        # "Villa General Belgrano, Córdoba" y Córdoba no es padre de ningún
+        # aviso de las búsquedas propias.
+        self._padres: set[str] = set()
 
     def _ruta_base(self, property_slug: str, zone: str, order: str = "") -> str:
         return f"/{property_slug}-{self.operation_slug}-{slug(zone)}{order}.html"
@@ -154,11 +162,13 @@ class ZonapropSource:
         zonas = list(search_cfg.get("zones") or [zone])
         with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
+                propia = self._ruta_base(property_slug, zone)
                 for j, ruta in enumerate(self._rutas_de(zone, property_slug, zonas)):
                     if i or j:
                         time.sleep(self.delay)
                     yield from self._fetch_pages(
-                        compartida, ruta, zone, self._paginas_de(ruta)
+                        compartida, ruta, zone, self._paginas_de(ruta),
+                        es_propia=ruta == propia,
                     )
 
     @contextmanager
@@ -171,7 +181,7 @@ class ZonapropSource:
                 yield page_obj
 
     def _fetch_pages(
-        self, page_obj, ruta: str, zone: str, max_pages: int
+        self, page_obj, ruta: str, zone: str, max_pages: int, es_propia: bool = True
     ) -> Iterator[dict]:
         for page_num in range(1, max_pages + 1):
             url = self._url(ruta, page_num)
@@ -182,6 +192,24 @@ class ZonapropSource:
                     avisos, seguir = self._traer_pagina(propia, url, ruta, zone, page_num)
             else:
                 avisos, seguir = self._traer_pagina(page_obj, url, ruta, zone, page_num)
+
+            if es_propia:
+                self._padres.update(slug(a["city"]) for a in avisos if a.get("city"))
+            else:
+                ajenos = [a for a in avisos if slug(a.get("city")) not in self._padres]
+                avisos = [a for a in avisos if a not in ajenos]
+                if ajenos and not avisos:
+                    # La ruta entera es de otro lugar: ni la paginamos.
+                    log.warning(
+                        "[zonaprop] %s es de otro lugar (%s, %s) — la salteo.",
+                        ruta, ajenos[0].get("neighborhood"), ajenos[0].get("city"),
+                    )
+                    return
+                if ajenos:
+                    log.info(
+                        "[zonaprop] %s: descarto %d aviso(s) de fuera de la zona.",
+                        ruta, len(ajenos),
+                    )
 
             yield from avisos
             if not seguir:

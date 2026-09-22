@@ -204,6 +204,10 @@ def rutas_por_zona_planas(
         # el sitemap es nacional y `belgrano-rosario` es el Belgrano de
         # Rosario, Santa Fe. Al final quedan el barrio o su ciudad, así que
         # `botanico-palermo` es Palermo y `belgrano-rosario` no es Belgrano.
+        # Lo que esto NO distingue es otra localidad que termina con el
+        # nombre del barrio: `villa-general-belgrano` (Córdoba) pasa igual
+        # que `barrancas-de-belgrano`. Eso lo filtra la fuente mirando la
+        # ubicación de las tarjetas (ver ZonapropSource._padres).
         candidatas = [z for z, s in slugs.items() if lugar[-len(s):] == s]
         # Y el caso del sub-barrio seguido de su barrio padre:
         # `belgrano-r-belgrano` es Belgrano R, pero termina en "belgrano".
