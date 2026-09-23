@@ -12,9 +12,11 @@ llene de nulls. Ya pasó una vez — ver `test_sources.py::test_argenprop_map`.
 
 `mercadolibre_page.html` trae varias tarjetas en vez de una, porque lo que se
 prueba ahí es qué se descarta: publicidad, emprendimientos, y un área sin
-calificar que no se puede tomar como cubierta. `remax_state.json` y
-`mudafy_payload.html` son los datos que cada sitio serializa en la página
-(coordenadas incluidas), no tarjetas.
+calificar que no se puede tomar como cubierta. `remax_state.json` son los datos que
+Remax serializa en la página (coordenadas incluidas), no tarjetas, y
+`mudafy_ficha.html` es una ficha y no una tarjeta: Mudafy se lee por fichas.
+Trae un aviso "similar" antes y otro después del propio, con otros m² y
+otras expensas, que es justamente lo que hay que no confundir.
 
 Para recapturar una tarjeta: abrí el listado en el navegador y copiá el
 `outerHTML` del primer resultado, después limpiá el contenido.

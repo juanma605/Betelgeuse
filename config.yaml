@@ -184,9 +184,24 @@ sources:
     operation_slug: venta          # venta | alquiler
     zone_prefix: "caba-"           # prefijo de Capital Federal en las URLs de Mudafy
     rate_limit_seconds: 4.0
-    # Mudafy no tiene paginación crawleable (mapa + lista de una sola carga,
-    # sin botón "más" ni links de página) y su robots.txt prohíbe cualquier
-    # URL con query string. Tope real: ~25 avisos por zona por corrida.
+    # El listado no pagina (~25 avisos por zona) y el robots.txt prohíbe las
+    # URLs con query string, pero declara este sitemap con los avisos
+    # individuales del sitio, y las fichas sí se pueden pedir. Se leen
+    # fichas: las tarjetas del listado solo aportan candidatos. El sitemap
+    # cubre ~90% de lo publicado, no todo (medido el 22/09). null lo apaga
+    # y quedan solo las tarjetas.
+    sitemap: "sitemap_listings.xml"
+    # Fichas por corrida: primero las que no conocemos, después refrescar
+    # las de nuestras zonas de la más vieja a la más nueva. Con 600 a 4 s
+    # son ~40 min, que corren en paralelo con Zonaprop (~80): no alargan la
+    # corrida. La primera vez hay ~1.400 fichas nuevas en todo el país, así
+    # que completar Mudafy lleva unas tres corridas.
+    max_fichas_per_run: 600
+    # Dónde se anota el barrio de cada ficha ya leída. El sitemap es
+    # nacional y la URL no dice el barrio: sin esto, cada corrida volvería a
+    # pedir las ~1.000 fichas de Pilar o Nordelta para descartarlas de nuevo.
+    # Por defecto, data/mudafy_fichas_<operación>.json.
+    # fichas_cache: "data/mudafy_fichas_venta.json"
 
   remax:
     enabled: true

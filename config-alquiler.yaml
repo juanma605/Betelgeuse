@@ -68,6 +68,8 @@ sources:
     operation_slug: alquiler
     zone_prefix: caba-
     rate_limit_seconds: 4.0
+    sitemap: sitemap_listings.xml
+    max_fichas_per_run: 600
   remax:
     enabled: true
     property_slug: departamentos

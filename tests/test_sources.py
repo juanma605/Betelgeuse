@@ -8,6 +8,8 @@ Acá se pone en rojo el día que pasa, contra un fixture que no toca la red.
 Ya sirvió una vez: ver `test_argenprop_map`.
 """
 
+from datetime import date
+
 from fake_dom import FIXTURES, card_from
 
 from inmobot import db
@@ -112,20 +114,69 @@ def test_argenprop_map():
     assert item["photo_count"] == 1
 
 
-def test_mudafy_map():
-    card = card_from("mudafy_card.html", 'a[href^="/departamentos/"]:has(h3)')
-    item = mudafy.build({})._map(card, "Almagro")
+def test_mudafy_ficha():
+    html = (FIXTURES / "mudafy_ficha.html").read_text(encoding="utf-8")
+    url = "https://mudafy.com.ar/departamentos/calle-falsa-100-departamento-en-venta-500001"
+    item = mudafy.parse_ficha(html, url)
 
     assert_esquema_comun(item)
-    assert item["id"] == "mudafy:680464"
-    assert (item["price"], item["currency"]) == (64_900, "USD")
-    assert (item["neighborhood"], item["city"]) == ("Almagro", "CABA")
-    assert (item["total_area"], item["rooms"]) == (36, 2)
-    assert (item["bedrooms"], item["bathrooms"]) == (1, 1)
-    assert item["maintenance_fee"] == 130_000
-    assert item["title"] == "Don Bosco 3825"
-    # La foto vive en el carrusel hermano del <a>, no adentro.
-    assert item["photo_count"] == 1
+    assert item["id"] == "mudafy:500001"
+    assert (item["price"], item["currency"]) == (123_000, "USD")
+    assert (item["neighborhood"], item["city"]) == ("Caballito", "CABA")
+    assert (item["latitude"], item["longitude"]) == (-34.62, -58.44)
+    assert (item["rooms"], item["bedrooms"], item["bathrooms"]) == (3, 2, 1)
+    # Lo que la tarjeta no traía. Son del aviso propio, no de los
+    # "similares" que la página muestra antes y después (250 m², 1950,
+    # 999.000 de expensas): esos son los que agarraría leer el primero
+    # que aparece.
+    assert (item["covered_area"], item["total_area"]) == (64, 70)
+    assert item["maintenance_fee"] == 150_000
+    assert item["age_years"] == date.today().year - 2000
+    # Dos fotos de esta publicación; la tercera es de otra.
+    assert item["photo_count"] == 2
+
+    # Casos reales: expensas sin moneda (la tarjeta las muestra en pesos) y
+    # cubierta mayor que total por un error de tipeo del anunciante.
+    raro = html.replace('"amount\\":150000,\\"currency\\":\\"ARS\\"', '"amount\\":150000,\\"currency\\":null')
+    raro = raro.replace('"roofed_area\\":64', '"roofed_area\\":640')
+    assert raro != html
+    item = mudafy.parse_ficha(raro, url)
+    assert item["maintenance_fee"] == 150_000
+    assert (item["covered_area"], item["total_area"]) == (None, 70)
+
+
+def test_mudafy_ficha_vendida_o_redirigida_no_es_un_aviso():
+    html = (FIXTURES / "mudafy_ficha.html").read_text(encoding="utf-8")
+    vendida = html.replace("schema.org/InStock", "schema.org/SoldOut")
+    url = "https://mudafy.com.ar/departamentos/calle-falsa-100-departamento-en-venta-500001"
+    assert mudafy.parse_ficha(vendida, url) is None
+    assert mudafy.parse_ficha(html, "https://mudafy.com.ar/venta/departamentos") is None
+
+
+def test_mudafy_filtra_el_sitemap_por_tipo_y_operacion():
+    fuente = mudafy.build({"property_slug": "departamentos", "operation_slug": "venta"})
+    assert fuente._es_del_tipo("https://mudafy.com.ar/departamentos/x-100-departamento-en-venta-1")
+    assert not fuente._es_del_tipo("https://mudafy.com.ar/departamentos/x-100-departamento-en-alquiler-1")
+    assert not fuente._es_del_tipo("https://mudafy.com.ar/casas/x-100-casa-en-venta-1")
+    # Basura real del sitemap: sin id.
+    assert not fuente._es_del_tipo("https://mudafy.com.ar/departamentos/aaa")
+
+
+def test_mudafy_elige_primero_lo_nuevo_y_despues_lo_mas_viejo_de_nuestras_zonas():
+    zonas = ["Palermo", "Caballito"]
+    cache = {
+        "10": {"url": "u10", "barrio": "Palermo Soho", "visto": "2026-09-20"},
+        "11": {"url": "u11", "barrio": "Caballito", "visto": "2026-09-10"},
+        # Leída y de otro lado: no se vuelve a pedir nunca.
+        "12": {"url": "u12", "barrio": "Pilar", "visto": "2026-09-01"},
+    }
+    tarjetas = {"1": "u1", "10": "u10"}
+    sitemap = {"2": "u2", "12": "u12", "1": "u1"}
+
+    cola = mudafy.elegir_fichas(tarjetas, sitemap, cache, zonas, tope=10)
+    assert [sid for sid, _ in cola] == ["1", "2", "11", "10"]
+    # El tope corta por el final: lo que se posterga es el refresco.
+    assert [sid for sid, _ in mudafy.elegir_fichas(tarjetas, sitemap, cache, zonas, 3)] == ["1", "2", "11"]
 
 
 
@@ -157,18 +208,6 @@ def test_los_ordenes_extra_salen_de_lo_que_cada_robots_txt_habilita():
     assert argenprop.build({})._url("/departamentos/venta/palermo", 2).endswith("?pagina-2")
 
 
-
-
-def test_mudafy_no_le_presta_coordenadas_a_un_aviso_que_no_las_tiene():
-    html = (FIXTURES / "mudafy_payload.html").read_text(encoding="utf-8")
-    coords = mudafy.coords_by_id(html)
-
-    # Indexado por el mismo id que usa _map() (el sufijo numérico del slug).
-    assert coords["680464"] == (-34.614, -58.419)
-    assert coords["201734"] == (-34.617, -58.416)
-    # El del medio no trae coordenadas: no puede quedarse con las del
-    # siguiente aviso ni con el `barycenter` del barrio.
-    assert "157315" not in coords
 
 
 def test_mercadolibre_descarta_publicidad_y_emprendimientos():
@@ -372,3 +411,15 @@ def test_una_fuente_que_no_puede_agotar_la_zona_no_da_de_baja_nada():
     # (nunca acá) o recién tras storage.max_missed_runs corridas.
     assert source.capped_zones == {"Palermo"}
     assert source.incomplete_zones == set()
+
+
+def test_mudafy_sin_red_no_cuenta_ausencias(monkeypatch, tmp_path):
+    """Si no responde ni un listado ni el sitemap, las zonas quedan como
+    incompletas: si quedaran "leídas con tope", cada aviso sumaría una
+    corrida sin verse y a la séptima caída de red se darían de baja."""
+    fuente = mudafy.build({"fichas_cache": str(tmp_path / "cache.json"), "rate_limit_seconds": 0})
+    monkeypatch.setattr(fuente, "_candidatos_de_tarjetas", lambda zonas: {})
+    monkeypatch.setattr(fuente, "_candidatos_del_sitemap", lambda: {})
+
+    assert list(fuente.fetch("Palermo", {"zones": ["Palermo"]})) == []
+    assert fuente.incomplete_zones == {"Palermo"}
