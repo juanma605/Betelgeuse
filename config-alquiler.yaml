@@ -49,6 +49,8 @@ sources:
     enabled: true
     property_slug: departamentos
     operation_slug: alquiler
+    zone_aliases:
+      Cañitas: Las Cañitas
     listing_slug: propiedades-individuales
     region_slug: capital-federal
     rate_limit_seconds: 8.0

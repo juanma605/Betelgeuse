@@ -111,6 +111,13 @@ sources:
     # El robots.txt prohíbe paginar (_Desde_): una página (~48 avisos) por
     # zona. Una sola request por zona, espaciadas.
     rate_limit_seconds: 8.0
+    # Cómo llama ML a una zona, cuando no es como en search.zones. ML no da
+    # error ante un barrio que no conoce: con "canitas" hacía una búsqueda
+    # por texto (1.115 avisos, algunos de Palermo o Belgrano) en vez del
+    # barrio "Las Cañitas" (995). Si una zona no coincide, el log lo avisa
+    # y la zona no se guarda hasta que se agregue acá.
+    zone_aliases:
+      Cañitas: "Las Cañitas"
 
   zonaprop:
     enabled: true
@@ -372,6 +379,12 @@ alerts:
 #   api_key: "env:NL_SEARCH_API_KEY"   # Ollama la ignora
 #   timeout_s: 20                      # un modelo local en CPU puede tardar
 #   json_mode: true                    # false si el proveedor rechaza response_format
+
+nl_search:
+  enabled: true
+  base_url: "https://api.groq.com/openai/v1"
+  model: "openai/gpt-oss-120b"
+  api_key: "env:NL_SEARCH_API_KEY"
 
 logging:
   level: INFO

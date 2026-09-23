@@ -29,6 +29,7 @@ from bs4 import BeautifulSoup
 
 from ..normalize import slug
 from ._browser import USER_AGENT
+from ._sitemap import zona_de_barrio
 from ._text import parse_number, parse_price, parse_total
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,10 @@ class MercadoLibreSource:
         self.listing_slug = conf.get("listing_slug", "propiedades-individuales")
         self.region_slug = conf.get("region_slug", "capital-federal")
         self.delay = float(conf.get("rate_limit_seconds", 8.0))
+        # Cómo llama ML a una zona del config, cuando no es igual: la zona
+        # "Cañitas" para ML es el barrio "Las Cañitas". Buscando "canitas"
+        # ML no da error, hace una búsqueda por texto.
+        self.zone_aliases: dict[str, str] = dict(conf.get("zone_aliases") or {})
         self.incomplete_zones: set[str] = set()
         # Ver el comentario en zonaprop.py: leída hasta el tope del
         # robots.txt, con inventario por delante.
@@ -95,8 +100,21 @@ class MercadoLibreSource:
         # (`Disallow: /*_Desde_`). Para ver más de una zona grande, se busca
         # además cada sub-barrio del config (search.subzones), que trae su
         # propia página. Todo se archiva en la zona madre.
-        response = self._pedir(zone)
+        zonas = list(search_cfg.get("zones") or [zone])
+        barrio = self.zone_aliases.get(zone, zone)
+        response = self._pedir(barrio)
         if response is None:
+            self.incomplete_zones.add(zone)
+            return
+        if not es_la_busqueda(response.text, barrio):
+            # Lo que devuelve no es el barrio sino una búsqueda por texto, con
+            # otro total y avisos de cualquier lado. No se guarda nada, y la
+            # zona no cuenta ausencias hasta que se corrija el nombre.
+            log.warning(
+                "[mercadolibre] ML no reconoce %r como barrio (hizo una búsqueda por "
+                "texto). Poné su nombre de ML en sources.mercadolibre.zone_aliases.",
+                barrio,
+            )
             self.incomplete_zones.add(zone)
             return
 
@@ -128,6 +146,11 @@ class MercadoLibreSource:
             vistos.update(i["id"] for i in nuevos)
             items.extend(nuevos)
             log.info("[mercadolibre] %s > %s: %d avisos más.", zone, sub, len(nuevos))
+
+        # La zona es la del barrio que declara el aviso, si es una del
+        # config: en la búsqueda de Cañitas aparecen avisos de Palermo.
+        for item in items:
+            item["zone"] = zona_de_barrio(item.get("neighborhood"), zonas) or zone
 
         # Un aviso que no aparece tanto puede haberse vendido como haber
         # quedado fuera de la única página de cada búsqueda: se decide con
