@@ -540,3 +540,42 @@ def test_mercadolibre_busca_cada_sub_barrio_y_archiva_todo_en_la_zona(monkeypatc
     assert fuente.totals == {"Palermo": 5813}
     assert mercadolibre.es_la_busqueda(respuestas["palermo-soho"], "Palermo Soho")
     assert not mercadolibre.es_la_busqueda(respuestas["botanico"], "Botánico")
+
+
+def test_mercadolibre_usa_el_nombre_del_barrio_en_ml_y_valida_la_zona(monkeypatch):
+    """La zona "Cañitas" para ML es "Las Cañitas". Buscando "canitas" no da
+    error: hace una búsqueda por texto, con otro total (1.115 contra 995) y
+    avisos de Palermo y Belgrano mezclados."""
+    tarjetas = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+    respuestas = {
+        "las-canitas": (
+            "<h1>Departamentos en Venta Propiedades individuales en Las Cañitas, Capital Federal</h1>"
+            '<span class="ui-search-search-result__quantity-results">995 resultados</span>' + tarjetas
+        ),
+        "canitas": "<h1>Capital federal canitas</h1>" + tarjetas,
+    }
+    pedidas = []
+
+    def fuente_con(conf):
+        fuente = mercadolibre.build(dict(conf, rate_limit_seconds=0))
+
+        def get(url):
+            barrio = url.rstrip("/").rsplit("/", 1)[-1]
+            pedidas.append(barrio)
+            return _RespuestaML(respuestas[barrio])
+
+        monkeypatch.setattr(fuente.client, "get", get)
+        return fuente
+
+    buena = fuente_con({"zone_aliases": {"Cañitas": "Las Cañitas"}})
+    items = list(buena.fetch("Cañitas", {"zones": ["Cañitas"]}))
+    assert pedidas == ["las-canitas"]
+    assert items and buena.totals == {"Cañitas": 995}
+    assert "Cañitas" not in buena.incomplete_zones
+
+    # Sin el alias: la búsqueda por texto no se guarda y la zona no cuenta
+    # ausencias, así no se dan de baja los avisos que ya teníamos.
+    sin_alias = fuente_con({})
+    assert list(sin_alias.fetch("Cañitas", {"zones": ["Cañitas"]})) == []
+    assert sin_alias.incomplete_zones == {"Cañitas"}
+    assert sin_alias.totals == {}
