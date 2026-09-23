@@ -69,8 +69,8 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df = pd.read_sql_query("SELECT * FROM listings WHERE active = 1", conn)
     if df.empty:
         return df
-    # Zonaprop y Mudafy no publican m² cubiertos en la tarjeta del listado,
-    # solo totales. Usamos el total para no perder esos avisos, pero queda
+    # Zonaprop no publica m² cubiertos en la tarjeta del listado, solo
+    # totales. Usamos el total para no perder esos avisos, pero queda
     # registrado: un PH de 60 m² cubiertos con 80 de patio no vale por m²
     # lo mismo que un depto de 140 m² cubiertos, y mezclarlos sin avisar
     # fabrica "oportunidades".
@@ -80,6 +80,50 @@ def load_active(conn: sqlite3.Connection) -> pd.DataFrame:
     df["price_per_m2"] = df["price_norm"] / df["area"]
     df["off_plan"] = [is_off_plan(t, u) for t, u in zip(df["title"], df["url"])]
     return df
+
+
+def cobertura(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Cuánto de cada portal tenemos, zona por zona.
+
+    Cruza los avisos activos contra el último total que declaró cada
+    búsqueda (tabla search_totals). Una fila por fuente, operación y zona:
+    `tenemos`, `declara`, `pct` y `medido` (cuándo se leyó el total).
+
+    No mira los filtros del dashboard a propósito: mide qué tan bien
+    scrapeamos, y el total del portal es de la búsqueda entera. Comparar
+    "3 ambientes" contra el total de todos los ambientes daría un
+    porcentaje inventado.
+
+    Vacío si la base no tiene la tabla todavía (una base vieja abierta en
+    solo lectura, o el demo).
+    """
+    try:
+        totales = pd.read_sql_query(
+            """
+            SELECT t.source, t.operation, t.zone, t.total AS declara, t.seen_at AS medido
+            FROM search_totals t
+            JOIN (
+                SELECT source, operation, zone, MAX(seen_at) AS ultimo
+                FROM search_totals GROUP BY source, operation, zone
+            ) u ON u.source = t.source AND u.operation = t.operation
+               AND u.zone = t.zone AND u.ultimo = t.seen_at
+            """,
+            conn,
+        )
+    except (sqlite3.OperationalError, pd.errors.DatabaseError):
+        return pd.DataFrame()
+    if totales.empty:
+        return totales
+
+    tenemos = pd.read_sql_query(
+        "SELECT source, operation, zone, COUNT(*) AS tenemos FROM listings "
+        "WHERE active = 1 GROUP BY source, operation, zone",
+        conn,
+    )
+    out = totales.merge(tenemos, on=["source", "operation", "zone"], how="left")
+    out["tenemos"] = out["tenemos"].fillna(0).astype(int)
+    out["pct"] = (100 * out["tenemos"] / out["declara"].where(out["declara"] > 0)).round(1)
+    return out[["source", "operation", "zone", "tenemos", "declara", "pct", "medido"]]
 
 
 def _trim_outliers(series: pd.Series, trim_pct: float) -> pd.Series:

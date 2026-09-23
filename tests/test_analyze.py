@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 
+import sqlite3
+
 import pandas as pd
 import pytest
 
@@ -228,3 +230,35 @@ def test_el_pozo_tambien_se_detecta_en_la_url():
         "Venta de 1 amb en flores, anticipo en el boleto de compra", None
     )
     assert not analyze.is_off_plan("Depto 3 ambientes reciclado con balcón", None)
+
+
+def test_cobertura_cruza_activos_con_el_ultimo_total_del_portal(tmp_path):
+    ruta = tmp_path / "t.db"
+    with db.connect(ruta) as conn:
+        for i, activo in ((1, 1), (2, 1), (3, 0)):
+            conn.execute(
+                "INSERT INTO listings (id, source, source_id, zone, first_seen, last_seen, active) "
+                "VALUES (?, 'zonaprop', ?, 'Palermo', 'x', 'x', ?)",
+                (f"zonaprop:{i}", str(i), activo),
+            )
+        conn.executemany(
+            "INSERT INTO search_totals VALUES ('zonaprop', 'venta', 'Palermo', ?, ?)",
+            [("2026-09-22T10:00", 100), ("2026-09-23T10:00", 40)],
+        )
+
+    with db.connect(ruta, readonly=True) as conn:
+        cob = analyze.cobertura(conn)
+
+    fila = cob.iloc[0]
+    # Los inactivos no cuentan, y manda el total más reciente.
+    assert (fila["tenemos"], fila["declara"], fila["pct"]) == (2, 40, 5.0)
+
+
+def test_cobertura_con_una_base_sin_la_tabla_no_rompe(tmp_path):
+    ruta = tmp_path / "vieja.db"
+    vieja = sqlite3.connect(ruta)
+    vieja.execute("CREATE TABLE listings (id TEXT)")
+    vieja.commit()
+    vieja.close()
+    with db.connect(ruta, readonly=True) as conn:
+        assert analyze.cobertura(conn).empty
