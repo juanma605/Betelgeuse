@@ -48,3 +48,19 @@ def parse_price(text: str | None) -> tuple[float | None, str | None]:
     else:
         currency = None
     return parse_number(text), currency
+
+
+_TOTAL = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)")
+
+
+def parse_total(text: str | None) -> int | None:
+    """El total de avisos que declara una búsqueda: "11.972 Departamentos en
+    venta en Palermo" -> 11972, "5.815 resultados" -> 5815.
+
+    Es un conteo, nunca lleva decimales: acá el punto siempre separa miles,
+    así que no hace falta la cautela de parse_number.
+    """
+    if not text:
+        return None
+    match = _TOTAL.search(text)
+    return int(match.group(1).replace(".", "")) if match else None

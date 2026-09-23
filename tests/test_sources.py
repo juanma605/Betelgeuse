@@ -381,6 +381,9 @@ class _PaginaLlena:
     def query_selector_all(self, _sel):
         return [self._card]
 
+    def query_selector(self, _sel):
+        return None  # sin encabezado: el total queda sin dato, no rompe
+
 
 def test_una_fuente_que_no_puede_agotar_la_zona_no_da_de_baja_nada():
     """El 21/09 se dieron de baja 815 avisos de Zonaprop en una sola corrida
@@ -466,3 +469,25 @@ def test_remax_un_sub_barrio_hereda_como_se_leyo_su_barrio():
     assert _estado_remax(enteras=["Palermo"], degradadas=["Quilmes"], aporto=aporto) == (
         {"Quilmes"}, set(),
     )
+
+
+def test_el_total_de_cada_busqueda_sale_del_encabezado():
+    from inmobot.sources._text import parse_total
+
+    # El punto de un conteo siempre separa miles: nunca es 11,972 avisos.
+    assert parse_total("11.972 Departamentos en venta en Palermo, CABA") == 11_972
+    assert parse_total("1 Departamento en venta en Cañitas, Córdoba") == 1
+    assert parse_total("Departamentos en venta") is None
+
+    assert mercadolibre.total_declarado(
+        '<span class="ui-search-search-result__quantity-results">5.815 resultados</span>'
+    ) == 5_815
+    assert mudafy.total_declarado(
+        "<title>1.195 departamentos en venta en CABA Palermo | Mudafy</title>"
+    ) == 1_195
+    # Un título sin conteo no es un total, aunque tenga números en otro lado.
+    assert mudafy.total_declarado("<title>Departamentos en venta en Guayaquil 720</title>") is None
+
+    _, state = remax_avisos()
+    assert remax.total_from_state(state) == 3
+    assert remax.total_from_state("no es json") is None

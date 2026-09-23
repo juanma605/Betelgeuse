@@ -1,8 +1,9 @@
 """Persistencia en SQLite.
 
-Dos tablas:
+Las tablas que importan:
   listings         -> estado actual de cada aviso (upsert en cada corrida)
   price_snapshots  -> una fila por aviso y por corrida en que cambió el precio
+  search_totals    -> cuántos avisos dice tener cada portal en cada zona
 
 La segunda es la que vale oro: con dos meses de corridas sabés qué avisos
 bajaron, cuántas veces y cuánto llevan publicados.
@@ -62,6 +63,23 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snap_listing ON price_snapshots(listing_id);
+
+-- Lo que cada portal dice tener en cada zona, por corrida ("11.972
+-- Departamentos en venta en Palermo"). Es el denominador de la cobertura:
+-- sin esto, "tenemos 806 avisos de Palermo" no dice si es mucho o poco.
+-- Sale del encabezado de páginas que el scrape ya pide, sin requests extra.
+--
+-- Ojo al sumar: el total de un barrio incluye a sus sub-barrios (el
+-- Palermo de Zonaprop contiene a Las Cañitas), aunque nosotros archivemos
+-- esos avisos en su propia zona.
+CREATE TABLE IF NOT EXISTS search_totals (
+    source     TEXT NOT NULL,
+    operation  TEXT NOT NULL,
+    zone       TEXT NOT NULL,
+    seen_at    TEXT NOT NULL,
+    total      INTEGER NOT NULL,
+    PRIMARY KEY (source, operation, zone, seen_at)
+);
 
 -- Una dirección se geocodifica una sola vez, aunque la repitan varios avisos
 -- o aparezca en corridas siguientes. Guarda también las que no se pudieron
@@ -277,3 +295,24 @@ def mark_inactive_after_misses(
         [source, operation, *zones, max_misses],
     )
     return cursor.rowcount
+
+
+def save_search_totals(
+    conn: sqlite3.Connection,
+    source: str,
+    totals: dict[str, int],
+    operation: str = "venta",
+) -> int:
+    """Guarda el total que declaró cada búsqueda de esta corrida."""
+    stamp = now_iso()
+    filas = [
+        (source, operation, zona, stamp, int(total))
+        for zona, total in totals.items()
+        if total is not None
+    ]
+    conn.executemany(
+        "INSERT OR REPLACE INTO search_totals (source, operation, zone, seen_at, total) "
+        "VALUES (?, ?, ?, ?, ?)",
+        filas,
+    )
+    return len(filas)

@@ -57,6 +57,9 @@ class RemaxSource:
         # Ver el comentario en zonaprop.py: leída hasta el tope del
         # robots.txt, con inventario por delante.
         self.capped_zones: set[str] = set()
+        # Cuántos avisos dice tener el portal en cada zona (ver
+        # db.search_totals). Solo de la búsqueda base de la zona.
+        self.totals: dict[str, int] = {}
         # Cómo terminó la búsqueda de cada zona, y a qué zonas le dio
         # avisos. De ahí salen incomplete_zones y capped_zones: ver
         # _recalcular_estado().
@@ -162,6 +165,11 @@ class RemaxSource:
                         zone, ", ".join(sorted(set(geo_labels(state)))[:3]) or "sin etiquetas",
                     )
                     return
+
+                if page_num == 1:
+                    total = total_from_state(state)
+                    if total is not None:
+                        self.totals[zone] = total
 
                 if page_num % PAGINAS_POR_AVISO == 0:
                     log.info(
@@ -288,8 +296,8 @@ def busqueda_degradada(labels: list[str], zone: str) -> bool:
     return not any(pedido in slug(label) for label in labels)
 
 
-def listings_from_state(state_json: str | None) -> list[dict]:
-    """Los avisos que el transfer state trae de la API de búsqueda.
+def _respuesta_de_busqueda(state_json: str | None) -> dict:
+    """La respuesta de la API de búsqueda, dentro del transfer state.
 
     La clave de primer nivel es un hash que Angular cambia entre builds, así
     que se busca por la URL de la request en vez de por una ruta fija.
@@ -297,19 +305,32 @@ def listings_from_state(state_json: str | None) -> list[dict]:
     try:
         estado = json.loads(state_json or "")
     except ValueError:
-        return []
+        return {}
     if not isinstance(estado, dict):
-        return []
+        return {}
     for valor in estado.values():
         if not isinstance(valor, dict):
             continue
         if "findAllWithEntrepreneurships" not in str(valor.get("u", "")):
             continue
-        datos = (valor.get("b") or {}).get("data") or {}
-        avisos = datos.get("data")
-        if isinstance(avisos, list):
-            return [a for a in avisos if isinstance(a, dict)]
+        datos = (valor.get("b") or {}).get("data")
+        if isinstance(datos, dict):
+            return datos
+    return {}
+
+
+def listings_from_state(state_json: str | None) -> list[dict]:
+    """Los avisos que el transfer state trae de la API de búsqueda."""
+    avisos = _respuesta_de_busqueda(state_json).get("data")
+    if isinstance(avisos, list):
+        return [a for a in avisos if isinstance(a, dict)]
     return []
+
+
+def total_from_state(state_json: str | None) -> int | None:
+    """Cuántos avisos tiene la búsqueda entera, no solo esta página."""
+    total = _respuesta_de_busqueda(state_json).get("totalItems")
+    return int(total) if isinstance(total, (int, float)) else None
 
 
 

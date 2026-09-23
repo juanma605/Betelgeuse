@@ -12,7 +12,10 @@ Entonces se trabaja por fichas:
 1. Se juntan candidatos del sitemap y de las ~25 tarjetas de cada zona. Se
    necesitan los dos: medido el 22/09, 20 de los 191 avisos que teníamos
    activos no estaban en el sitemap, y 7 de 8 revisados seguían publicados.
-   El sitemap cubre ~90%, no todo.
+   Y el sitemap está lejos de ser el inventario: lista ~1.370 departamentos
+   en venta en todo el país, mientras el listado declara 1.195 solo en
+   Palermo (23/09). Esos totales se guardan por corrida (`totals`), aunque
+   no se sabe qué cuentan: Colegiales declara 1.123 y Remax tiene 258 ahí.
 2. Se pide la ficha de cada candidato que no conocemos, y después se
    refrescan las conocidas de nuestras zonas, de la más vieja a la más nueva,
    hasta `max_fichas_per_run`.
@@ -45,6 +48,7 @@ import httpx
 from ..normalize import slug
 from ._browser import USER_AGENT
 from ._sitemap import descargar, zona_de_barrio
+from ._text import parse_total
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +82,9 @@ class MudafySource:
         # Ni las tarjetas ni el sitemap ven la zona entera (ver arriba), así
         # que la ausencia de un aviso no prueba que se vendió: baja paciente.
         self.capped_zones: set[str] = set()
+        # Cuántos avisos dice tener el portal en cada zona (ver
+        # db.search_totals). Solo de la búsqueda base de la zona.
+        self.totals: dict[str, int] = {}
         self._por_zona: dict[str, list[dict]] | None = None
         self.client = httpx.Client(
             headers={"User-Agent": USER_AGENT, "Accept-Language": "es-AR,es;q=0.9"},
@@ -227,6 +234,9 @@ class MudafySource:
                 if respuesta.status_code != 200:
                     log.info("[mudafy] el listado de %s respondió %s", zona, respuesta.status_code)
                     continue
+                total = total_declarado(respuesta.text)
+                if total is not None:
+                    self.totals[zona] = self.totals.get(zona, 0) + total
                 for href in re.findall(rf'href="(/{re.escape(property_slug)}/[a-z0-9-]+)"', respuesta.text):
                     completa = BASE + href
                     encontrado = _ID.search(href)
@@ -261,6 +271,19 @@ class MudafySource:
         temporal = self.cache_path.with_suffix(".tmp")
         temporal.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
         temporal.replace(self.cache_path)
+
+
+def total_declarado(html: str) -> int | None:
+    """El "1.195 departamentos en venta en CABA Palermo" del <title>.
+
+    Mudafy declara bastante más de lo que su sitemap lista: 1.195 en Palermo
+    contra ~1.370 departamentos en venta en todo el sitemap, el 23/09. Por
+    eso vale guardarlo: es la única medida de cuánto nos falta.
+    """
+    match = re.search(r"<title>([^<]*)</title>", html)
+    if not match or not re.match(r"\s*[\d.]+\s", match.group(1)):
+        return None
+    return parse_total(match.group(1))
 
 
 def elegir_fichas(

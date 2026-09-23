@@ -21,7 +21,7 @@ from pathlib import Path
 from ..normalize import slug
 from ._browser import browser_page, is_bot_challenge
 from ._sitemap import descargar_con_navegador, rutas_por_zona_planas, zona_de_barrio
-from ._text import parse_number, parse_price
+from ._text import parse_number, parse_price, parse_total
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +92,13 @@ class ZonapropSource:
         self._padres: set[str] = set()
         # Las zonas del config, para archivar cada aviso en la de su barrio.
         self._zonas: list[str] = []
+        # Cuántos avisos dice tener el portal en cada zona (ver
+        # db.search_totals). Solo de la búsqueda base de la zona.
+        self.totals: dict[str, int] = {}
+        # El encabezado de la última página traída ("11.972 Departamentos
+        # en venta en Palermo, CABA"): _fetch_pages decide si es el total de
+        # la zona, porque solo cuenta el de la búsqueda base.
+        self._ultimo_total: int | None = None
 
     def _ruta_base(self, property_slug: str, zone: str, order: str = "") -> str:
         return f"/{property_slug}-{self.operation_slug}-{slug(zone)}{order}.html"
@@ -206,6 +213,10 @@ class ZonapropSource:
             else:
                 avisos, seguir = self._traer_pagina(page_obj, url, ruta, zone, page_num)
 
+            if es_propia and page_num == 1 and self._ultimo_total is not None:
+                # Con varios tipos de propiedad, cada uno tiene su búsqueda
+                # base y la zona tiene la suma.
+                self.totals[zone] = self.totals.get(zone, 0) + self._ultimo_total
             if es_propia:
                 self._padres.update(slug(a["city"]) for a in avisos if a.get("city"))
             else:
@@ -241,6 +252,7 @@ class ZonapropSource:
         self, page_obj, url: str, ruta: str, zone: str, page_num: int
     ) -> tuple[list[dict], bool]:
         """Los avisos de una página, y si tiene sentido pedir la siguiente."""
+        self._ultimo_total = None
         try:
             page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
             page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
@@ -256,6 +268,8 @@ class ZonapropSource:
                 log.info("[zonaprop] corto en %s (pág %d): %s", ruta, page_num, exc)
             return [], False
 
+        titulo = page_obj.query_selector("h1")
+        self._ultimo_total = parse_total(titulo.inner_text()) if titulo else None
         cards = page_obj.query_selector_all(CARD_SELECTOR)
         if not cards:
             return [], False

@@ -123,6 +123,13 @@ def cmd_scrape(cfg) -> None:
                     continue
 
                 stats = db.upsert_listings(conn, kept, keep_snapshots=keep)
+                totales = getattr(source, "totals", {}) or {}
+                if totales:
+                    db.save_search_totals(conn, name, totales, operation=operation)
+                    log.info(
+                        "[%s] el portal declara %s",
+                        name, ", ".join(f"{z} {t:,}".replace(",", ".") for z, t in totales.items()),
+                    )
 
                 # Cada zona cae en uno de tres casos, y de eso depende qué
                 # derecho tenemos a dar de baja un aviso que no apareció:

@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 
 from ..normalize import slug
 from ._browser import USER_AGENT
-from ._text import parse_number, parse_price
+from ._text import parse_number, parse_price, parse_total
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +58,9 @@ class MercadoLibreSource:
         # Ver el comentario en zonaprop.py: leída hasta el tope del
         # robots.txt, con inventario por delante.
         self.capped_zones: set[str] = set()
+        # Cuántos avisos dice tener el portal en cada zona (ver
+        # db.search_totals). Solo de la búsqueda base de la zona.
+        self.totals: dict[str, int] = {}
         self._last_request = 0.0
         self.client = httpx.Client(
             headers={"User-Agent": USER_AGENT, "Accept-Language": "es-AR,es;q=0.9"},
@@ -87,6 +90,9 @@ class MercadoLibreSource:
         finally:
             self._last_request = time.monotonic()
 
+        total = total_declarado(response.text)
+        if total is not None:
+            self.totals[zone] = total
         items = parse_listing_page(response.text, zone)
         if not items:
             # Una búsqueda por barrio de CABA sin ningún resultado es casi
@@ -102,6 +108,12 @@ class MercadoLibreSource:
         # única página: se decide con el tiempo.
         self.capped_zones.add(zone)
         yield from items
+
+
+def total_declarado(html: str) -> int | None:
+    """El "5.815 resultados" del encabezado de la búsqueda."""
+    match = re.search(r"quantity-results[^>]*>([^<]+)<", html)
+    return parse_total(match.group(1)) if match else None
 
 
 def parse_listing_page(html: str, zone: str) -> list[dict]:

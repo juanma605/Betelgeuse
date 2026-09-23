@@ -224,3 +224,15 @@ def test_base_vieja_sin_columna_operation_se_migra(tmp_path):
 
     assert "operation" in columnas
     assert "idx_listings_operation" in indices
+
+
+def test_se_guarda_el_total_que_declara_cada_busqueda(tmp_path):
+    with db.connect(tmp_path / "t.db") as conn:
+        guardados = db.save_search_totals(
+            conn, "zonaprop", {"Palermo": 11972, "Cañitas": None}, operation="venta"
+        )
+        filas = conn.execute("SELECT source, operation, zone, total FROM search_totals").fetchall()
+
+    # Una zona sin dato no se guarda como 0: 0 diría que el barrio está vacío.
+    assert guardados == 1
+    assert [tuple(f) for f in filas] == [("zonaprop", "venta", "Palermo", 11972)]

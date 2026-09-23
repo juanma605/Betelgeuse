@@ -94,3 +94,19 @@ def _tarjeta_en(ubicacion: str):
     html = (FIXTURES / "zonaprop_card.html").read_text(encoding="utf-8")
     html = html.replace("Almagro, Capital Federal", ubicacion)
     return FakeElement(BeautifulSoup(html, "html.parser").select_one("[data-posting-type]"))
+
+
+def test_el_total_de_la_zona_es_el_de_la_busqueda_base(monkeypatch):
+    """Las rutas del sitemap son recortes de la zona (`-con-balcon`,
+    `-2-habitaciones`): sumarlas contaría dos veces el mismo aviso. Y de la
+    base, solo la página 1, que es donde está el encabezado."""
+    src, _ = _fuente(monkeypatch)
+    traer_original = src._traer_pagina
+
+    def traer(page_obj, url, ruta, zone, n):
+        src._ultimo_total = {"/departamentos-venta-belgrano.html": 6670}.get(ruta, 55) * n
+        return traer_original(page_obj, url, ruta, zone, n)
+
+    monkeypatch.setattr(src, "_traer_pagina", traer)
+    list(src.fetch("Belgrano", {}))
+    assert src.totals == {"Belgrano": 6670}
