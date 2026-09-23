@@ -225,6 +225,31 @@ def rutas_por_zona_planas(
     return {z: sorted(set(rutas)) for z, rutas in agrupadas.items()}
 
 
+def zona_de_barrio(barrio: str | None, zonas: list[str]) -> str | None:
+    """La zona del config que corresponde al barrio que declara una ficha.
+
+    Cuando el sitemap es de fichas y no de búsquedas, la URL no dice el
+    barrio (Mudafy: `/departamentos/guayaquil-720-departamento-en-venta-808429`):
+    sale de la ficha misma, y hay que traducirlo a una zona del config.
+
+    Mismo criterio que las rutas: "Palermo Soho" es Palermo, "Las Cañitas"
+    es Cañitas, y cuando matchean dos gana la más específica — "Belgrano R"
+    es de Belgrano R aunque también contenga "belgrano".
+    """
+    palabras = slug(barrio).split("-")
+    if not palabras or palabras == [""]:
+        return None
+    candidatas = []
+    for zona in zonas:
+        buscada = slug(zona).split("-")
+        n = len(buscada)
+        if any(palabras[i:i + n] == buscada for i in range(len(palabras) - n + 1)):
+            candidatas.append(zona)
+    if not candidatas:
+        return None
+    return max(candidatas, key=lambda z: len(slug(z)))
+
+
 # Lo que Zonaprop pega después del barrio y no es parte del lugar:
 # "-2-habitaciones", "-con-balcon", "-orden-precio-ascendente",
 # "-mas-de-5-habitaciones", "-monoambiente".

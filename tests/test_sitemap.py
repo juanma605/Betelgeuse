@@ -145,3 +145,15 @@ def test_sin_cupo_se_piden_todas():
         "/departamentos/venta/palermo",
         "/departamentos/venta/palermo-soho",
     ]
+
+
+def test_zona_de_barrio_traduce_lo_que_declara_la_ficha():
+    zonas = ["Palermo", "Belgrano", "Belgrano R", "Cañitas", "Villa Urquiza"]
+    assert _sitemap.zona_de_barrio("Palermo Soho", zonas) == "Palermo"
+    assert _sitemap.zona_de_barrio("Las Cañitas", zonas) == "Cañitas"
+    # Contiene "belgrano", pero es la más específica la que gana.
+    assert _sitemap.zona_de_barrio("Belgrano R", zonas) == "Belgrano R"
+    assert _sitemap.zona_de_barrio("Belgrano", zonas) == "Belgrano"
+    # "Villa" sola no alcanza: la zona entera tiene que estar.
+    assert _sitemap.zona_de_barrio("Villa Crespo", zonas) is None
+    assert _sitemap.zona_de_barrio(None, zonas) is None
