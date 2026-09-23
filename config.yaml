@@ -188,8 +188,9 @@ sources:
     # URLs con query string, pero declara este sitemap con los avisos
     # individuales del sitio, y las fichas sí se pueden pedir. Se leen
     # fichas: las tarjetas del listado solo aportan candidatos. El sitemap
-    # cubre ~90% de lo publicado, no todo (medido el 22/09). null lo apaga
-    # y quedan solo las tarjetas.
+    # no es el inventario completo: lista ~1.370 departamentos en venta en
+    # todo el país y el listado declara 1.195 solo en Palermo (23/09).
+    # null lo apaga y quedan solo las tarjetas.
     sitemap: "sitemap_listings.xml"
     # Fichas por corrida: primero las que no conocemos, después refrescar
     # las de nuestras zonas de la más vieja a la más nueva. Con 600 a 4 s

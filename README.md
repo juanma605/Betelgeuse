@@ -382,7 +382,7 @@ venderle esto a un cliente, le cambiás el YAML y nada más.
 |---|---|---|---|---|
 | Zonaprop | Playwright, 8 s entre páginas | 5 páginas + 1 reordenada (`robots.txt`) | no, solo totales | sí, por dirección |
 | Argenprop | Playwright, 8 s entre páginas | 3 páginas + 1 reordenada (`robots.txt`) | sí | sí, por dirección |
-| Mudafy | HTTP simple, 4 s entre fichas: sitemap + ~25 tarjetas por zona, y la ficha de cada aviso | 600 fichas por corrida (tope propio); el sitemap cubre ~90% de lo publicado | sí | sí, ~100 m |
+| Mudafy | HTTP simple, 4 s entre fichas: sitemap + ~25 tarjetas por zona, y la ficha de cada aviso | 600 fichas por corrida (tope propio); el sitemap no es todo el inventario (ver `search_totals`) | sí | sí, ~100 m |
 | Remax | Playwright, 6 s entre páginas | hasta agotar la zona (tope propio) | sí | sí |
 | MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | sí, por dirección |
 
