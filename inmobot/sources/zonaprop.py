@@ -99,6 +99,7 @@ class ZonapropSource:
         # en venta en Palermo, CABA"): _fetch_pages decide si es el total de
         # la zona, porque solo cuenta el de la búsqueda base.
         self._ultimo_total: int | None = None
+        self._ultimo_titulo = ""
 
     def _ruta_base(self, property_slug: str, zone: str, order: str = "") -> str:
         return f"/{property_slug}-{self.operation_slug}-{slug(zone)}{order}.html"
@@ -179,17 +180,42 @@ class ZonapropSource:
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
         zonas = list(search_cfg.get("zones") or [zone])
         self._zonas = zonas
+        subzonas = (search_cfg.get("subzones") or {}).get(zone) or []
         with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
                 # La primera ruta es siempre la búsqueda base de la zona (ver
                 # _rutas_de), que es la que enseña qué ciudades son válidas.
-                for j, ruta in enumerate(self._rutas_de(zone, property_slug, zonas)):
+                # Después van los sub-barrios del config (search.subzones), en
+                # su orden y fuera del cupo de rotación: son geográficos y no
+                # se pisan, a diferencia de los recortes del sitemap
+                # (`-con-balcon`, `-2-habitaciones`), que sí.
+                rutas = self._rutas_de(zone, property_slug, zonas)
+                de_sub = {self._ruta_de_subzona(property_slug, sub, zone): sub for sub in subzonas}
+                rutas = rutas[:1] + list(de_sub) + [r for r in rutas[1:] if r not in de_sub]
+                for j, ruta in enumerate(rutas):
                     if i or j:
                         time.sleep(self.delay)
                     yield from self._fetch_pages(
                         compartida, ruta, zone, self._paginas_de(ruta),
-                        es_propia=j == 0,
+                        es_propia=j == 0 or ruta in de_sub,
+                        es_base=j == 0,
+                        esperado=de_sub.get(ruta),
                     )
+
+    def _ruta_de_subzona(self, property_slug: str, sub: str, zone: str) -> str:
+        """La búsqueda de un sub-barrio, con el nombre que usa Zonaprop.
+
+        Para algunos es el nombre solo (`palermo-soho`), para otros va
+        seguido del barrio: `belgrano-c` devuelve Belgrano entero y
+        `botanico` la Argentina entera, pero el sitemap lista
+        `belgrano-c-belgrano` y `botanico-palermo`. Si el sitemap tiene esa
+        forma se usa esa; si no, la armada a mano, que igual se valida por
+        el título (ver _fetch_pages).
+        """
+        con_padre = self._ruta_base(property_slug, f"{sub} {zone}")
+        if con_padre in ((self._rutas or {}).get(zone) or []):
+            return con_padre
+        return self._ruta_base(property_slug, sub)
 
     @contextmanager
     def _sesion(self):
@@ -201,8 +227,17 @@ class ZonapropSource:
                 yield page_obj
 
     def _fetch_pages(
-        self, page_obj, ruta: str, zone: str, max_pages: int, es_propia: bool = True
+        self, page_obj, ruta: str, zone: str, max_pages: int, es_propia: bool = True,
+        es_base: bool | None = None, esperado: str | None = None,
     ) -> Iterator[dict]:
+        """Las páginas de una búsqueda.
+
+        `es_base`: el total del encabezado es el de la zona (ver totals).
+        `esperado`: el sub-barrio que tiene que decir el título, seguido de
+        la zona. Zonaprop no da 404 ante un slug que no reconoce, devuelve
+        otra búsqueda: si el título no los nombra, se descarta entera.
+        """
+        es_base = es_propia if es_base is None else es_base
         for page_num in range(1, max_pages + 1):
             url = self._url(ruta, page_num)
             if self.new_session_per_page:
@@ -213,7 +248,17 @@ class ZonapropSource:
             else:
                 avisos, seguir = self._traer_pagina(page_obj, url, ruta, zone, page_num)
 
-            if es_propia and page_num == 1 and self._ultimo_total is not None:
+            # El título nombra al barrio padre ("en Palermo Soho, Palermo"): se
+            # exigen los dos, así un Botánico de Mendoza no pasa por Palermo.
+            if esperado and page_num == 1 and (
+                f"-en-{slug(esperado)}-{slug(zone)}-" not in f"-{slug(self._ultimo_titulo)}-"
+            ):
+                log.info(
+                    "[zonaprop] %s no es un barrio de Zonaprop (el título dice %r), lo salteo.",
+                    esperado, self._ultimo_titulo,
+                )
+                return
+            if es_base and page_num == 1 and self._ultimo_total is not None:
                 # Con varios tipos de propiedad, cada uno tiene su búsqueda
                 # base y la zona tiene la suma.
                 self.totals[zone] = self.totals.get(zone, 0) + self._ultimo_total
@@ -253,6 +298,7 @@ class ZonapropSource:
     ) -> tuple[list[dict], bool]:
         """Los avisos de una página, y si tiene sentido pedir la siguiente."""
         self._ultimo_total = None
+        self._ultimo_titulo = ""
         try:
             page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
             page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
@@ -269,7 +315,8 @@ class ZonapropSource:
             return [], False
 
         titulo = page_obj.query_selector("h1")
-        self._ultimo_total = parse_total(titulo.inner_text()) if titulo else None
+        self._ultimo_titulo = titulo.inner_text().strip() if titulo else ""
+        self._ultimo_total = parse_total(self._ultimo_titulo)
         cards = page_obj.query_selector_all(CARD_SELECTOR)
         if not cards:
             return [], False

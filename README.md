@@ -380,11 +380,11 @@ venderle esto a un cliente, le cambiás el YAML y nada más.
 
 | Fuente | Cómo se lee | Tope por zona y corrida | m² cubiertos | Ubicación |
 |---|---|---|---|---|
-| Zonaprop | Playwright, 8 s entre páginas | 5 páginas + 1 reordenada (`robots.txt`) | no, solo totales | sí, por dirección |
+| Zonaprop | Playwright, 8 s entre páginas | 5 páginas + 1 reordenada (`robots.txt`), por búsqueda; más las de cada sub-barrio (`search.subzones`) | no, solo totales | sí, por dirección |
 | Argenprop | Playwright, 8 s entre páginas | 3 páginas + 1 reordenada (`robots.txt`) | sí | sí, por dirección |
 | Mudafy | HTTP simple, 4 s entre fichas: sitemap + ~25 tarjetas por zona, y la ficha de cada aviso | 600 fichas por corrida (tope propio); el sitemap no es todo el inventario (ver `search_totals`) | sí | sí, ~100 m |
 | Remax | Playwright, 6 s entre páginas | hasta agotar la zona (tope propio) | sí | sí |
-| MercadoLibre | HTTP simple, 8 s entre zonas | 1 página (`robots.txt`) | sí | sí, por dirección |
+| MercadoLibre | HTTP simple, 8 s entre búsquedas | 1 página por búsqueda (`robots.txt`); la zona y cada sub-barrio (`search.subzones`) son búsquedas aparte | sí | sí, por dirección |
 
 El tope de cada fuente sale de su `robots.txt`, no de lo que aguanta el
 sitio. Zonaprop y Argenprop prohíben paginar más allá de 5 y 3, y prohíben
