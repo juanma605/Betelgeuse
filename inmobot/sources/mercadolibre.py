@@ -131,10 +131,10 @@ class MercadoLibreSource:
                     "fuente acá, sin reintentar.", exc.response.status_code,
                 )
             else:
-                log.error("[mercadolibre] no pude leer %s: %s", nombre, exc)
+                log.error("[mercadolibre] no pude leer %s: %s", self._url(nombre, ambientes, antiguedad), exc)
             return None
         except httpx.HTTPError as exc:
-            log.error("[mercadolibre] no pude leer %s: %s", nombre, exc)
+            log.error("[mercadolibre] no pude leer %s: %s", self._url(nombre, ambientes, antiguedad), exc)
             return None
         finally:
             self._last_request = time.monotonic()
