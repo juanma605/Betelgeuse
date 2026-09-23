@@ -164,6 +164,64 @@ Los hospitales no salen del dataset oficial porque publica las coordenadas en
 el sistema propio de la Ciudad (EPSG:9498), y convertirlas sin una librería de
 proyecciones es adivinar.
 
+## Buscar en lenguaje natural (opcional)
+
+Con esto activado, el dashboard suma un campo arriba de los filtros donde se
+escribe algo como *"3 ambientes en Palermo o Belgrano, menos de 150 mil
+dólares, con más de 60 m²"*. Debajo muestra lo que entendió
+(`Palermo o Belgrano · 3 ambientes · hasta USD 150.000 · 60+ m²`), así se ve
+la interpretación y se puede corregir la frase. Los filtros manuales siguen
+funcionando sobre el resultado.
+
+**El modelo no escribe SQL.** Devuelve un JSON con claves fijas (zonas,
+operación, ambientes, dormitorios, baños, precio, m², expensas). Python se
+queda con las claves conocidas que tengan el tipo correcto y arma la consulta
+con parámetros (`inmobot/buscador.py`), así que lo que escriba el usuario o
+el modelo nunca pasa a formar parte del SQL. Al modelo se le pasa la lista
+real de zonas de la base, y además del lado de Python se hace un emparejamiento
+aproximado ("Las Cañitas" → Cañitas, "Palerno" → Palermo). Lo que no se
+encuentra se avisa en pantalla. Los m² son los cubiertos, y si el aviso no
+los publica, los totales, igual que en el resto del análisis.
+
+Es **opcional**: si falta la sección `nl_search`, tiene `enabled: false`, o
+no está instalado el paquete `openai`, el dashboard es el de siempre. Si el
+modelo tarda, no responde o devuelve cualquier cosa, aparece un mensaje y se
+sigue con los filtros manuales.
+
+Sirve cualquier proveedor compatible con la API de OpenAI, y cambiar de uno a
+otro es solo tocar el YAML:
+
+```bash
+pip install openai
+```
+
+Con **Ollama**, local y gratis ([ollama.com](https://ollama.com); hay que
+bajar el modelo una vez con `ollama pull qwen2.5:7b`):
+
+```yaml
+nl_search:
+  enabled: true
+  base_url: "http://localhost:11434/v1"
+  model: "qwen2.5:7b"
+  timeout_s: 30        # en CPU, la primera respuesta tarda
+```
+
+Con un **proveedor en la nube** (el ejemplo es Groq; OpenAI, OpenRouter y
+otros funcionan igual). La clave va en el `.env` como `NL_SEARCH_API_KEY=...`,
+nunca en el YAML:
+
+```yaml
+nl_search:
+  enabled: true
+  base_url: "https://api.groq.com/openai/v1"
+  model: "llama-3.3-70b-versatile"
+  api_key: "env:NL_SEARCH_API_KEY"
+```
+
+Si el proveedor rechaza el pedido de respuesta en JSON (`response_format`),
+agregá `json_mode: false`: la instrucción queda en el prompt y la respuesta
+se valida igual.
+
 ## Tests
 
 ```bash
