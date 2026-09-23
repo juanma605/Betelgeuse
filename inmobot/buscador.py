@@ -258,7 +258,7 @@ def describir(filtros: dict, moneda: str = "USD") -> str:
 
     amin, amax = filtros.get("ambientes_min"), filtros.get("ambientes_max")
     if amin is not None and amin == amax:
-        partes.append(f"{amin} ambientes")
+        partes.append("1 ambiente" if amin == 1 else f"{amin} ambientes")
     elif amin is not None and amax is not None:
         partes.append(f"{amin} a {amax} ambientes")
     elif amin is not None:
