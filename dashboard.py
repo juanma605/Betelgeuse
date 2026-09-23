@@ -228,7 +228,7 @@ REFERENCIAS = {
 
 AREA_NOTE = (
     "m² totales, no cubiertos: el aviso no publica la superficie cubierta "
-    "(Zonaprop y Mudafy no la muestran en el listado). Su precio/m² sale más bajo "
+    "(Zonaprop no la muestra en el listado). Su precio/m² sale más bajo "
     "de lo real, así que si aparece como barato puede ser un PH con patio o un "
     "balcón grande, no una oportunidad."
 )

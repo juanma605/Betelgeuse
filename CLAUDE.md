@@ -36,7 +36,8 @@ inmobot/
   cli.py                 # scrape | analyze | export
   sources/
     mercadolibre.py      # sitio público por HTTP (la API cerró la búsqueda)
-    zonaprop.py, argenprop.py, mudafy.py, remax.py   # Playwright
+    zonaprop.py, argenprop.py, remax.py   # Playwright
+    mudafy.py              # HTTP: sitemap de fichas + tarjetas del listado
 ```
 
 Principio de diseño: **nada hardcodeado**. Cambiar de "deptos en venta en
@@ -126,6 +127,12 @@ precio, m² y fotos perfectamente válidos.
 Hay dos redes ahora: `search.bbox` descarta lo que cae fuera del recuadro,
 y Remax corta la zona si los `geoLabel` no mencionan el barrio pedido. Las
 dos son redes, no reemplazan mirar el primer scrape de una zona nueva.
+
+Un sub-barrio que el portal no busca por separado igual puede llegar: Remax
+mete "Las Cañitas" y "Belgrano R" adentro de Palermo y Belgrano, y Mudafy no
+tiene listado para ninguno de los dos (404) pero sus fichas los nombran. En
+las dos fuentes la zona sale del barrio que declara cada aviso
+(`_sitemap.zona_de_barrio`), no de la búsqueda que lo trajo.
 
 ### El alquiler estimado por edificio está mal en un tercio de los casos
 
