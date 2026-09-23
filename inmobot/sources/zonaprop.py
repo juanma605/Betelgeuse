@@ -20,7 +20,7 @@ from pathlib import Path
 
 from ..normalize import slug
 from ._browser import browser_page, is_bot_challenge
-from ._sitemap import descargar_con_navegador, rutas_por_zona_planas
+from ._sitemap import descargar_con_navegador, rutas_por_zona_planas, zona_de_barrio
 from ._text import parse_number, parse_price
 
 log = logging.getLogger(__name__)
@@ -90,6 +90,8 @@ class ZonapropSource:
         # "Villa General Belgrano, Córdoba" y Córdoba no es padre de ningún
         # aviso de las búsquedas propias.
         self._padres: set[str] = set()
+        # Las zonas del config, para archivar cada aviso en la de su barrio.
+        self._zonas: list[str] = []
 
     def _ruta_base(self, property_slug: str, zone: str, order: str = "") -> str:
         return f"/{property_slug}-{self.operation_slug}-{slug(zone)}{order}.html"
@@ -118,7 +120,16 @@ class ZonapropSource:
         if self._rutas is None:
             self._rutas = self._bajar_sitemap(property_slug, zonas)
 
-        resto = [r for r in (self._rutas.get(zone) or []) if r != propia]
+        del_sitemap = self._rutas.get(zone) or []
+        if del_sitemap and propia not in del_sitemap:
+            # Zonaprop no reconoce el slug armado a mano y no da 404:
+            # `departamentos-venta-belgrano-r.html` devuelve Belgrano entero
+            # (6.670 avisos) y `-canitas.html` un departamento de Córdoba. El
+            # sitemap los nombra `belgrano-r-belgrano` y `las-canitas`: la
+            # búsqueda base pasa a ser la más corta que el sitemap sí lista,
+            # que es la del barrio sin filtros.
+            propia = min(del_sitemap, key=len)
+        resto = [r for r in del_sitemap if r != propia]
         cupo = self.max_searches_per_zone
         if not cupo or len(resto) + 1 <= cupo:
             return [propia] + resto
@@ -160,15 +171,17 @@ class ZonapropSource:
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
         zonas = list(search_cfg.get("zones") or [zone])
+        self._zonas = zonas
         with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
-                propia = self._ruta_base(property_slug, zone)
+                # La primera ruta es siempre la búsqueda base de la zona (ver
+                # _rutas_de), que es la que enseña qué ciudades son válidas.
                 for j, ruta in enumerate(self._rutas_de(zone, property_slug, zonas)):
                     if i or j:
                         time.sleep(self.delay)
                     yield from self._fetch_pages(
                         compartida, ruta, zone, self._paginas_de(ruta),
-                        es_propia=ruta == propia,
+                        es_propia=j == 0,
                     )
 
     @contextmanager
@@ -278,6 +291,10 @@ class ZonapropSource:
         neighborhood, city = _parse_location(
             location_el.inner_text() if location_el else None
         )
+        # La zona es la del barrio que declara el aviso, si es una del
+        # config: la búsqueda de Palermo trae avisos de "Las Cañitas", y
+        # esos son de Cañitas. Si no es de ninguna, queda la que se buscó.
+        zona = zona_de_barrio(neighborhood, self._zonas or [zone]) or zone
 
         # La foto principal es lazy (carga con hover/scroll) y a veces solo
         # queda el ícono "Imagen siguiente" en el momento del scrape — nada
@@ -291,7 +308,7 @@ class ZonapropSource:
             "source_id": source_id,
             "url": BASE + href if href.startswith("/") else href,
             "title": title,
-            "zone": zone,
+            "zone": zona,
             "price": price,
             "currency": currency,
             "neighborhood": neighborhood,

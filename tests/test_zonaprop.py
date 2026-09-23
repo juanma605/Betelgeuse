@@ -1,3 +1,6 @@
+from bs4 import BeautifulSoup
+from fake_dom import FIXTURES, FakeElement
+
 from inmobot.sources import zonaprop
 
 PAGINAS = {
@@ -43,3 +46,51 @@ def test_rutas_del_sitemap_de_otro_lugar_se_descartan(monkeypatch):
     }
     # La ruta de Córdoba se deja de paginar apenas se ve que es de otro lado.
     assert pedidas.count("/departamentos-venta-villa-general-belgrano.html") == 1
+
+
+def test_la_busqueda_base_sale_del_sitemap_si_la_armada_no_existe():
+    """`departamentos-venta-belgrano-r.html` no es un slug de Zonaprop y no
+    da 404: devuelve Belgrano entero, y 5 páginas de Belgrano se guardaban
+    como Belgrano R (772 avisos contra 567 que tiene el barrio). El sitemap
+    la nombra `belgrano-r-belgrano`."""
+    src = zonaprop.ZonapropSource({"sitemap": "x", "max_searches_per_zone": 0})
+    src._rutas = {
+        "Belgrano R": [
+            "/departamentos-venta-belgrano-r-belgrano-2-habitaciones.html",
+            "/departamentos-venta-belgrano-r-belgrano.html",
+        ],
+        "Palermo": [
+            "/departamentos-venta-palermo-soho-palermo.html",
+            "/departamentos-venta-palermo.html",
+        ],
+    }
+    rutas = src._rutas_de("Belgrano R", "departamentos", ["Belgrano R"])
+    assert rutas[0] == "/departamentos-venta-belgrano-r-belgrano.html"
+    assert "/departamentos-venta-belgrano-r.html" not in rutas
+    assert len(rutas) == 2
+
+    # Si el sitemap sí la lista, la base sigue siendo la armada a mano.
+    assert src._rutas_de("Palermo", "departamentos", ["Palermo"])[0] == (
+        "/departamentos-venta-palermo.html"
+    )
+
+
+def test_cada_aviso_se_archiva_en_el_barrio_que_declara(monkeypatch):
+    src, _ = _fuente(monkeypatch)
+    monkeypatch.setattr(
+        src, "_traer_pagina",
+        lambda page_obj, url, ruta, zone, n: (
+            [src._map(_tarjeta_en("Belgrano R, Belgrano"), zone)], False
+        ),
+    )
+    monkeypatch.setattr(src, "_rutas_de", lambda zone, ps, zonas: ["/departamentos-venta-belgrano.html"])
+    zonas = ["Belgrano", "Belgrano R"]
+    (item,) = list(src.fetch("Belgrano", {"zones": zonas}))
+    assert item["zone"] == "Belgrano R"
+
+
+def _tarjeta_en(ubicacion: str):
+    """La tarjeta real del fixture, con otra ubicación."""
+    html = (FIXTURES / "zonaprop_card.html").read_text(encoding="utf-8")
+    html = html.replace("Almagro, Capital Federal", ubicacion)
+    return FakeElement(BeautifulSoup(html, "html.parser").select_one("[data-posting-type]"))
