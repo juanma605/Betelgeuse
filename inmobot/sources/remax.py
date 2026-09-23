@@ -19,6 +19,7 @@ from typing import Iterator
 
 from ..normalize import slug
 from ._browser import browser_page, is_bot_challenge
+from ._sitemap import zona_de_barrio
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,14 @@ class RemaxSource:
         # Ver el comentario en zonaprop.py: leída hasta el tope del
         # robots.txt, con inventario por delante.
         self.capped_zones: set[str] = set()
+        # Cómo terminó la búsqueda de cada zona, y a qué zonas le dio
+        # avisos. De ahí salen incomplete_zones y capped_zones: ver
+        # _recalcular_estado().
+        self._rotas: set[str] = set()
+        self._degradadas: set[str] = set()
+        self._con_tope: set[str] = set()
+        self._enteras: set[str] = set()
+        self._aporto: dict[str, set[str]] = {}
 
     def _url(self, zone: str, page: int) -> str:
         """URL de búsqueda de una zona.
@@ -76,7 +85,41 @@ class RemaxSource:
     # ---------------------------------------------------------------- #
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        try:
+            yield from self._buscar(zone, search_cfg["zones"])
+        finally:
+            self._recalcular_estado()
+
+    def _recalcular_estado(self) -> None:
+        """Qué zonas quedaron leídas enteras, con tope o incompletas.
+
+        Remax no tiene búsqueda propia para Belgrano R ni para Cañitas: sus
+        avisos vienen adentro de las de Belgrano y Palermo, con el geoLabel
+        "Belgrano R" y "Las Cañitas", y ahí se los reasigna (ver _map). Pedir
+        esas dos zonas devuelve otra búsqueda y quedan degradadas — pero si
+        la búsqueda que les trajo los avisos llegó al final, también las
+        vimos enteras, y sus avisos vendidos se tienen que poder dar de baja.
+
+        Se recalcula después de cada zona porque la fuente no sabe cuál es
+        la última, y el orden del config es libre: Cañitas puede venir antes
+        que Palermo.
+        """
+        def cubierta_por(zona: str, busquedas: set[str]) -> bool:
+            return any(zona in self._aporto.get(b, set()) for b in busquedas)
+
+        self.capped_zones = set(self._con_tope)
+        self.incomplete_zones = set(self._rotas)
+        for zona in self._degradadas:
+            if cubierta_por(zona, self._rotas):
+                self.incomplete_zones.add(zona)
+            elif cubierta_por(zona, self._con_tope):
+                self.capped_zones.add(zona)
+            elif not cubierta_por(zona, self._enteras):
+                self.incomplete_zones.add(zona)
+
+    def _buscar(self, zone: str, zonas: list[str]) -> Iterator[dict]:
         traidos = 0
+        aporto = self._aporto.setdefault(zone, set())
         with browser_page() as page_obj:
             for page_num in range(1, self.max_pages + 1):
                 url = self._url(zone, page_num)
@@ -87,7 +130,7 @@ class RemaxSource:
                     )
                     state = page_obj.evaluate(STATE_JS)
                 except Exception as exc:
-                    self.incomplete_zones.add(zone)
+                    self._rotas.add(zone)
                     if is_bot_challenge(page_obj):
                         log.warning(
                             "[remax] verificación anti-bot en %s (pág %d) — corto acá, "
@@ -107,13 +150,15 @@ class RemaxSource:
                         "[remax] %s: se acabaron los resultados en la pág %d.",
                         zone, page_num,
                     )
+                    self._enteras.add(zone)
                     return
 
                 if busqueda_degradada(geo_labels(state), zone):
-                    self.incomplete_zones.add(zone)
-                    log.warning(
-                        "[remax] %s no es un barrio que Remax reconozca: devolvió "
-                        "otra búsqueda (%s). Corto la zona sin guardar nada.",
+                    self._degradadas.add(zone)
+                    log.info(
+                        "[remax] %s no tiene búsqueda propia en Remax: devolvió otra "
+                        "(%s). No guardo nada de acá; si es un sub-barrio, sus avisos "
+                        "llegan por la búsqueda del barrio grande.",
                         zone, ", ".join(sorted(set(geo_labels(state)))[:3]) or "sin etiquetas",
                     )
                     return
@@ -125,9 +170,10 @@ class RemaxSource:
                     )
 
                 for aviso in avisos:
-                    item = self._map(aviso, zone)
+                    item = self._map(aviso, zone, zonas)
                     if item:
                         traidos += 1
+                        aporto.add(item["zone"])
                         yield item
 
                 if page_num < self.max_pages:
@@ -138,11 +184,11 @@ class RemaxSource:
             # (25 páginas x 100 son 2500 avisos y Palermo tiene 1456), pero
             # si Remax crece, esta zona deja de tener derecho a dar de baja
             # por ausencia hasta que se la pueda agotar de nuevo.
-            self.capped_zones.add(zone)
+            self._con_tope.add(zone)
 
     # ---------------------------------------------------------------- #
 
-    def _map(self, aviso: dict, zone: str) -> dict | None:
+    def _map(self, aviso: dict, zone: str, zonas: list[str] | None = None) -> dict | None:
         """Un aviso del transfer state al esquema común.
 
         Sale del mismo JSON que alimenta las tarjetas, así que trae lo que
@@ -158,13 +204,18 @@ class RemaxSource:
             return None
 
         barrio, ciudad = _parse_geo_label(aviso.get("geoLabel"))
+        # La zona es la del barrio que declara el aviso, si es una del
+        # config: "Las Cañitas" que vino en la búsqueda de Palermo es de
+        # Cañitas, y "Belgrano R" que vino en la de Belgrano, de Belgrano R.
+        # Si el barrio no es de ninguna zona, queda la que se buscó.
+        zona = zona_de_barrio(barrio, zonas or [zone]) or zone
         item: dict = {
             "id": f"{self.name}:{source_id}",
             "source": self.name,
             "source_id": source_id,
             "url": f"{BASE}/listings/{source_id}",
             "title": (aviso.get("title") or "").strip() or zone,
-            "zone": zone,
+            "zone": zona,
             "price": _numero(aviso.get("price")),
             "currency": _valor(aviso.get("currency")),
             "neighborhood": barrio,

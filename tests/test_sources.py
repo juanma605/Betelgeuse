@@ -423,3 +423,46 @@ def test_mudafy_sin_red_no_cuenta_ausencias(monkeypatch, tmp_path):
 
     assert list(fuente.fetch("Palermo", {"zones": ["Palermo"]})) == []
     assert fuente.incomplete_zones == {"Palermo"}
+
+
+def test_remax_archiva_cada_aviso_en_el_barrio_que_declara():
+    """Remax no tiene búsqueda propia para Cañitas ni para Belgrano R: sus
+    avisos vienen adentro de Palermo y Belgrano, con su geoLabel."""
+    avisos, _ = remax_avisos()
+    zonas = ["Palermo", "Cañitas", "Belgrano", "Belgrano R", "Almagro"]
+    fuente = remax.build({})
+
+    canitas = dict(avisos[0], geoLabel="Las Cañitas, Capital Federal")
+    assert fuente._map(canitas, "Palermo", zonas)["zone"] == "Cañitas"
+    belgrano_r = dict(avisos[0], geoLabel="Belgrano R, Capital Federal")
+    assert fuente._map(belgrano_r, "Belgrano", zonas)["zone"] == "Belgrano R"
+    # Un vecino que no es zona del config se queda en la que se buscó.
+    boedo = dict(avisos[0], geoLabel="Boedo, Capital Federal")
+    assert fuente._map(boedo, "Almagro", zonas)["zone"] == "Almagro"
+
+
+def _estado_remax(enteras=(), con_tope=(), rotas=(), degradadas=(), aporto=None):
+    fuente = remax.build({})
+    fuente._enteras, fuente._con_tope = set(enteras), set(con_tope)
+    fuente._rotas, fuente._degradadas = set(rotas), set(degradadas)
+    fuente._aporto = {k: set(v) for k, v in (aporto or {}).items()}
+    fuente._recalcular_estado()
+    return fuente.incomplete_zones, fuente.capped_zones
+
+
+def test_remax_un_sub_barrio_hereda_como_se_leyo_su_barrio():
+    aporto = {"Palermo": {"Palermo", "Cañitas"}}
+    # Palermo se leyó hasta el final: Cañitas también, se puede dar de baja.
+    assert _estado_remax(enteras=["Palermo"], degradadas=["Cañitas"], aporto=aporto) == (set(), set())
+    # Palermo llegó al tope de páginas: Cañitas también, baja paciente.
+    assert _estado_remax(con_tope=["Palermo"], degradadas=["Cañitas"], aporto=aporto) == (
+        set(), {"Palermo", "Cañitas"},
+    )
+    # Palermo se cortó: de Cañitas no se sabe nada.
+    assert _estado_remax(rotas=["Palermo"], degradadas=["Cañitas"], aporto=aporto) == (
+        {"Palermo", "Cañitas"}, set(),
+    )
+    # Una zona degradada que ninguna búsqueda cubrió sigue incompleta.
+    assert _estado_remax(enteras=["Palermo"], degradadas=["Quilmes"], aporto=aporto) == (
+        {"Quilmes"}, set(),
+    )
