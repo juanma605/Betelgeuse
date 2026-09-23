@@ -244,6 +244,55 @@ st.caption("Avisos por fuente: " + " · ".join(
     f"{src} ({n})" for src, n in filtered["source"].value_counts().items()
 ))
 
+
+# --- cobertura: cuánto de cada portal tenemos ----------------------------- #
+def _miles(n: float) -> str:
+    return f"{n:,.0f}".replace(",", ".")
+
+
+with st.expander("Cobertura: cuánto de cada portal tenemos"):
+    with db.connect(demo.db_path(cfg, use_demo), readonly=True) as _conn_cob:
+        cob = analyze.cobertura(_conn_cob)
+    if cob.empty:
+        st.info(
+            "Todavía no hay totales guardados. Cada `scrape` anota cuántos avisos "
+            "declara cada portal por zona; aparecen acá después de la próxima corrida."
+        )
+    else:
+        # No mira los filtros de la izquierda: el total del portal es de la
+        # búsqueda entera, y compararlo con un recorte daría un % inventado.
+        varias_ops = cob["operation"].nunique() > 1
+        cob = cob.assign(
+            portal=[f"{s} ({o})" if varias_ops else s for s, o in zip(cob["source"], cob["operation"])],
+            celda=[
+                f"{str(p).replace('.', ',')}%  ({_miles(t)} / {_miles(d)})"
+                for p, t, d in zip(cob["pct"], cob["tenemos"], cob["declara"])
+            ],
+        )
+        orden = [z for z in cfg.get_path("search.zones", []) if z in set(cob["zone"])]
+        orden += sorted(set(cob["zone"]) - set(orden))
+        tabla = cob.pivot(index="zone", columns="portal", values="celda").reindex(orden).fillna("—")
+        tabla.index.name = "Zona"
+        st.dataframe(tabla, width="stretch")
+
+        medido = pd.to_datetime(cob["medido"]).max().tz_convert("America/Argentina/Buenos_Aires")
+        st.caption(
+            f"Avisos activos en la base contra el total que declara la búsqueda de "
+            f"cada portal, leído en el scrape del {medido:%d/%m a las %H:%M}. No "
+            "aplica los filtros de la izquierda. El techo real no es 100%: entre "
+            "11 y 13% de lo publicado lo descartan nuestros propios filtros (rango "
+            "de precio, m², fotos)."
+        )
+        st.caption(
+            "El total de un barrio incluye sus sub-barrios (el Palermo de los "
+            "portales contiene a Las Cañitas) aunque acá esos avisos estén en su "
+            "propia zona: el % del barrio grande sale un poco más bajo de lo real. "
+            "Los totales de Mudafy no cierran (declara 1.123 en Colegiales, donde "
+            "Remax tiene 258): tomalos con pinzas. Argenprop no se mide porque "
+            "Cloudflare corta sus listados. Remax y Mudafy no tienen búsqueda "
+            "propia para Cañitas y Belgrano R."
+        )
+
 # --- promedio por zona ---------------------------------------------------#
 st.subheader("USD/m² promedio por zona")
 st.bar_chart(filtered.groupby("zone")["price_per_m2"].mean())
