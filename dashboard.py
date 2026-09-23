@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
-from inmobot import analyze, config, db, demo, places, yields
+from inmobot import analyze, buscador, config, db, demo, places, yields
 
 st.set_page_config(page_title="inmobot", layout="wide")
 st.title("inmobot — mercado en vivo")
@@ -47,6 +47,63 @@ if df.empty:
     st.warning("No hay avisos activos. Corré `python -m inmobot scrape` primero.")
     st.stop()
 
+# --- búsqueda en lenguaje natural (opcional) ---------------------------- #
+# Solo aparece con `nl_search` configurado y `openai` instalado; si no, el
+# dashboard es el de siempre. El modelo devuelve filtros, no SQL: ver
+# inmobot/buscador.py. Recorta `df` antes que todo lo demás, así los filtros
+# manuales de abajo siguen funcionando sobre el resultado.
+if buscador.habilitado(cfg):
+    with st.sidebar:
+        pedido = st.text_input(
+            "Buscar",
+            placeholder="3 ambientes en Palermo o Belgrano, menos de 150 mil, más de 60 m²",
+            help="Un modelo de lenguaje convierte la frase en filtros. Abajo se "
+                 "muestra lo que entendió: si no es lo que querías, reescribí la frase.",
+        ).strip()
+
+    if pedido:
+        # Streamlit corre el script entero con cada clic: sin esto, mover un
+        # slider volvería a llamar al modelo. Los errores no se guardan, así
+        # un servidor que se cayó y volvió se puede reintentar con Enter.
+        guardadas = st.session_state.setdefault("busquedas_nl", {})
+        with db.connect(demo.db_path(cfg, use_demo), readonly=True) as conn:
+            if pedido not in guardadas:
+                zonas_db = [z for (z,) in conn.execute(
+                    "SELECT DISTINCT zone FROM listings WHERE active = 1 AND zone IS NOT NULL"
+                )]
+                with st.spinner("Interpretando la búsqueda..."):
+                    interpretado = buscador.interpretar(pedido, zonas_db, cfg)
+                if interpretado["error"] is None:
+                    guardadas[pedido] = interpretado
+            else:
+                interpretado = guardadas[pedido]
+
+            columnas = {fila["name"] for fila in conn.execute("PRAGMA table_info(listings)")}
+            filtros_nl, sin_columna = buscador.quitar_sin_columna(interpretado["filtros"], columnas)
+            if filtros_nl:
+                sql, params = buscador.construir_sql(filtros_nl)
+                ids_nl = {fila["id"] for fila in conn.execute(sql, params)}
+
+        with st.sidebar:
+            if interpretado["error"]:
+                st.warning(interpretado["error"] + " Sigo con los filtros manuales.")
+            if filtros_nl:
+                st.caption("Entendí: " + buscador.describir(
+                    filtros_nl, cfg.get_path("search.currency", "USD")
+                ))
+            for aviso in interpretado["avisos"] + sin_columna:
+                st.caption("⚠ " + aviso)
+
+        if filtros_nl:
+            df = df[df["id"].isin(ids_nl)]
+            if df.empty:
+                st.info(
+                    "Ningún aviso activo cumple la búsqueda "
+                    f"({buscador.describir(filtros_nl, cfg.get_path('search.currency', 'USD'))}). "
+                    "Probá aflojar algún filtro o borrá la frase para ver todo."
+                )
+                st.stop()
+
 # Distancia a lo que hace mejor o peor a una ubicación. Se calcula sobre la
 # base entera y antes de filtrar, porque ahora también se filtra por esto.
 _distancias = places.distancias(df)
@@ -68,6 +125,9 @@ with st.sidebar:
     sources = st.multiselect("Fuente", sorted(df["source"].unique()), default=None)
     incl_off_plan = st.checkbox("Incluir pozo/emprendimientos", value=False)
     pmin, pmax = int(df["price_norm"].min()), int(df["price_norm"].max())
+    # Con un solo precio (una búsqueda que deja un aviso) st.slider falla si
+    # el mínimo y el máximo son iguales.
+    pmax = max(pmax, pmin + 1)
     price_range = st.slider("Precio", pmin, pmax, (pmin, pmax))
 
     st.subheader("Ubicación")
