@@ -58,7 +58,7 @@ sources:
     enabled: true
     property_slug: departamentos
     operation_slug: alquiler
-    rate_limit_seconds: 8.0
+    rate_limit_seconds: 5.0
     max_pages: 5
     extra_orders:
     - -orden-precio-ascendente

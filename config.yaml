@@ -128,9 +128,12 @@ sources:
     # misma sesión, que es justo donde vimos gatillarse Cloudflare).
     property_slug: departamentos   # departamentos | casas | ph
     operation_slug: venta          # venta | alquiler | alquiler-temporario
-    # Subido de 4 a 8: con 4 segundos Cloudflare cortaba las tres zonas en la
-    # primera o segunda página y traíamos un tercio de lo permitido.
-    rate_limit_seconds: 8.0
+    # Estuvo en 8 desde el 18/09: con 4 segundos Cloudflare cortaba las tres
+    # zonas en la primera o segunda página. Pero lo que disparaba el corte
+    # era reusar la sesión, no el ritmo (ver new_session_per_page): desde el
+    # 21/09 no hubo un solo corte. Bajado a 5 el 23/09, probado con 30
+    # páginas sin cortes (~30% más rápido). Si vuelven los cortes, subilo.
+    rate_limit_seconds: 5.0
     # El robots.txt del sitio solo permite indexar hasta la página 5
     # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
     # Es un tope duro: aunque pongas más, el código lo recorta a 5.
