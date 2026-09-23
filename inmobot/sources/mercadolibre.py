@@ -75,20 +75,30 @@ class MercadoLibreSource:
         ]
         return f"{BASE}/" + "/".join(p for p in parts if p) + "/"
 
-    def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
-        # Una request por zona: el espaciado va entre zonas, no entre páginas.
+    def _pedir(self, nombre: str) -> httpx.Response | None:
+        """Una búsqueda, respetando el espaciado entre requests."""
         wait = self.delay - (time.monotonic() - self._last_request)
         if self._last_request and wait > 0:
             time.sleep(wait)
         try:
-            response = self.client.get(self._url(zone))
+            response = self.client.get(self._url(nombre))
             response.raise_for_status()
+            return response
         except httpx.HTTPError as exc:
-            log.error("[mercadolibre] no pude leer %s: %s", zone, exc)
-            self.incomplete_zones.add(zone)
-            return
+            log.error("[mercadolibre] no pude leer %s: %s", nombre, exc)
+            return None
         finally:
             self._last_request = time.monotonic()
+
+    def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
+        # Una página por búsqueda: el robots.txt prohíbe paginar
+        # (`Disallow: /*_Desde_`). Para ver más de una zona grande, se busca
+        # además cada sub-barrio del config (search.subzones), que trae su
+        # propia página. Todo se archiva en la zona madre.
+        response = self._pedir(zone)
+        if response is None:
+            self.incomplete_zones.add(zone)
+            return
 
         total = total_declarado(response.text)
         if total is not None:
@@ -102,12 +112,39 @@ class MercadoLibreSource:
             self.incomplete_zones.add(zone)
             return
 
-        # El robots.txt prohíbe paginar (`Disallow: /*_Desde_`), así que de
-        # los 5.793 avisos que ML tiene en Palermo vemos 48. Un aviso que no
-        # aparece tanto puede haberse vendido como haber quedado fuera de esa
-        # única página: se decide con el tiempo.
+        vistos = {item["id"] for item in items}
+        for sub in (search_cfg.get("subzones") or {}).get(zone) or []:
+            response = self._pedir(sub)
+            if response is None:
+                # No sabemos qué había ahí: que la zona no cuente ausencias.
+                self.incomplete_zones.add(zone)
+                continue
+            if not es_la_busqueda(response.text, sub):
+                # ML no da 404 ante un barrio que no reconoce: busca el texto
+                # ("Capital federal canitas"). Eso no es el sub-barrio.
+                log.info("[mercadolibre] %s no es un barrio de ML, lo salteo.", sub)
+                continue
+            nuevos = [i for i in parse_listing_page(response.text, zone) if i["id"] not in vistos]
+            vistos.update(i["id"] for i in nuevos)
+            items.extend(nuevos)
+            log.info("[mercadolibre] %s > %s: %d avisos más.", zone, sub, len(nuevos))
+
+        # Un aviso que no aparece tanto puede haberse vendido como haber
+        # quedado fuera de la única página de cada búsqueda: se decide con
+        # el tiempo.
         self.capped_zones.add(zone)
         yield from items
+
+
+def es_la_busqueda(html: str, barrio: str) -> bool:
+    """Si la página es la búsqueda de ese barrio y no otra cosa.
+
+    El título de una búsqueda por barrio dice "... en Palermo Soho, Capital
+    Federal". Una que ML no reconoce devuelve una búsqueda por texto con
+    otro título ("Capital federal canitas").
+    """
+    match = re.search(r"<h1[^>]*>([^<]+)</h1>", html)
+    return bool(match) and f"-en-{slug(barrio)}-" in f"-{slug(match.group(1))}-"
 
 
 def total_declarado(html: str) -> int | None:

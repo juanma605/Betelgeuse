@@ -10,6 +10,18 @@ search:
   - Villa Urquiza
   - Colegiales
   - Villa Crespo
+  # Ver config.yaml: sub-barrios que se buscan aparte dentro de su zona.
+  subzones:
+    Palermo:
+    - Palermo Soho
+    - Palermo Hollywood
+    - Palermo Chico
+    - Palermo Nuevo
+    - Palermo Viejo
+    - Botánico
+    Belgrano:
+    - Belgrano C
+    - Belgrano Chico
   currency: USD
   price_min: 100
   price_max: 5000

@@ -17,6 +17,30 @@ search:
     - "Villa Urquiza"
     - "Colegiales"
     - "Villa Crespo"
+  # Sub-barrios que se buscan aparte, dentro de su zona. Cada búsqueda tiene
+  # tope (1 página en MercadoLibre, 5 en Zonaprop), así que una zona grande
+  # se ve poco: de los 5.813 avisos de Palermo en ML veíamos 48. Buscando
+  # también cada sub-barrio, cada uno trae su propio tope. Todo se archiva
+  # en la zona madre y la cobertura se sigue midiendo contra el total de
+  # la zona entera.
+  #
+  # Primero se busca la zona y después cada sub-barrio, en este orden. Si
+  # un portal no reconoce el nombre (devuelve otra búsqueda), ese
+  # sub-barrio se saltea en ese portal. Hoy lo usan MercadoLibre y Zonaprop.
+  # Medido el 23/09 (avisos que declara cada búsqueda, ML / Zonaprop):
+  # Soho 759/1.060, Hollywood 1.568/1.625, Chico 901/1.123, Nuevo 151/291,
+  # Viejo 49/117, Botánico 232/?.
+  subzones:
+    Palermo:
+      - "Palermo Soho"
+      - "Palermo Hollywood"
+      - "Palermo Chico"
+      - "Palermo Nuevo"
+      - "Palermo Viejo"
+      - "Botánico"
+    Belgrano:
+      - "Belgrano C"
+      - "Belgrano Chico"
   # Moneda en la que querés comparar. Los avisos en otra moneda se convierten
   # usando fx_rates (abajo) o se descartan si no hay cotización.
   currency: USD

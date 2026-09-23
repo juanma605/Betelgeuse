@@ -491,3 +491,52 @@ def test_el_total_de_cada_busqueda_sale_del_encabezado():
     _, state = remax_avisos()
     assert remax.total_from_state(state) == 3
     assert remax.total_from_state("no es json") is None
+
+
+class _RespuestaML:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        return None
+
+
+def test_mercadolibre_busca_cada_sub_barrio_y_archiva_todo_en_la_zona(monkeypatch):
+    """Una página por búsqueda: 48 de los 5.813 avisos de Palermo. Cada
+    sub-barrio trae su propia página, y todo cuenta como Palermo."""
+    tarjetas = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+
+    def pagina(barrio, total):
+        return (
+            f"<h1>Departamentos en Venta Propiedades individuales en {barrio}, Capital Federal</h1>"
+            f'<span class="ui-search-search-result__quantity-results">{total} resultados</span>'
+            + tarjetas
+        )
+
+    respuestas = {
+        "palermo": pagina("Palermo", "5.813"),
+        "palermo-soho": pagina("Palermo Soho", "759"),
+        # Lo que ML devuelve ante un barrio que no conoce: una búsqueda por texto.
+        "botanico": "<h1>Capital federal botanico</h1>" + tarjetas,
+    }
+    pedidas = []
+    fuente = mercadolibre.build({"rate_limit_seconds": 0})
+
+    def get(url):
+        barrio = url.rstrip("/").rsplit("/", 1)[-1]
+        pedidas.append(barrio)
+        return _RespuestaML(respuestas[barrio])
+
+    monkeypatch.setattr(fuente.client, "get", get)
+    subzonas = {"Palermo": ["Palermo Soho", "Botánico"]}
+    items = list(fuente.fetch("Palermo", {"subzones": subzonas}))
+
+    # Primero el barrio, después cada sub-barrio en el orden del config.
+    assert pedidas == ["palermo", "palermo-soho", "botanico"]
+    # Los mismos avisos en dos búsquedas no se cuentan dos veces.
+    assert len(items) == len({i["id"] for i in items}) > 0
+    assert {i["zone"] for i in items} == {"Palermo"}
+    # El total es el del barrio entero: contra eso se mide la cobertura.
+    assert fuente.totals == {"Palermo": 5813}
+    assert mercadolibre.es_la_busqueda(respuestas["palermo-soho"], "Palermo Soho")
+    assert not mercadolibre.es_la_busqueda(respuestas["botanico"], "Botánico")
