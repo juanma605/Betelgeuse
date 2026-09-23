@@ -13,3 +13,10 @@ playwright>=1.40
 
 # Dashboard.
 streamlit>=1.30
+
+# Opcional: buscador en lenguaje natural del dashboard (nl_search en
+# config.yaml). Queda comentado a propósito: sin él todo anda igual y el
+# buscador no aparece. Es el cliente de la API de OpenAI, que también habla
+# con Ollama y con cualquier proveedor compatible. Para usarlo:
+# `pip install openai`.
+# openai>=1.40

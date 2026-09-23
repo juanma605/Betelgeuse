@@ -307,5 +307,31 @@ alerts:
     # Avisar solo si el aviso supera este score de oportunidad (0-100).
     min_score: 70
 
+# Buscador en lenguaje natural del dashboard ("3 ambientes en Palermo, menos
+# de 150 mil"). Opcional: sin esta sección, con enabled: false, o sin el
+# paquete `openai` instalado, el dashboard funciona igual y el buscador no
+# aparece. El modelo no escribe SQL: devuelve filtros que se validan en
+# Python (ver inmobot/buscador.py).
+#
+# Sirve cualquier proveedor compatible con la API de OpenAI. Cambiar de uno a
+# otro es cambiar estas líneas:
+#
+#   Ollama local (gratis, sin clave; antes: `ollama pull qwen2.5:7b`)
+#     base_url: "http://localhost:11434/v1"
+#     model: "qwen2.5:7b"
+#
+#   En la nube (ej. Groq; la clave va en el .env, nunca acá)
+#     base_url: "https://api.groq.com/openai/v1"
+#     model: "llama-3.3-70b-versatile"
+#     api_key: "env:NL_SEARCH_API_KEY"
+#
+# nl_search:
+#   enabled: true
+#   base_url: "http://localhost:11434/v1"
+#   model: "qwen2.5:7b"
+#   api_key: "env:NL_SEARCH_API_KEY"   # Ollama la ignora
+#   timeout_s: 20                      # un modelo local en CPU puede tardar
+#   json_mode: true                    # false si el proveedor rechaza response_format
+
 logging:
   level: INFO

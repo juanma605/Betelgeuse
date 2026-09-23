@@ -113,5 +113,13 @@ alerts:
     to_addrs:
     - env:ALERT_TO
     min_score: 70
+# Buscador en lenguaje natural del dashboard: opcional, ver config.yaml.
+# nl_search:
+#   enabled: true
+#   base_url: "http://localhost:11434/v1"
+#   model: "qwen2.5:7b"
+#   api_key: "env:NL_SEARCH_API_KEY"
+#   timeout_s: 20
+#   json_mode: true
 logging:
   level: INFO
