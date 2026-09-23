@@ -53,7 +53,10 @@ sources:
       Cañitas: Las Cañitas
     listing_slug: propiedades-individuales
     region_slug: capital-federal
-    rate_limit_seconds: 8.0
+    rate_limit_seconds: 5.0
+    split_rooms: [1-ambiente, 2-ambientes, 3-ambientes, 4-ambientes, mas-de-5-ambientes]
+    split_age: [0años-0años, 1años-15años, 15años-40años, 40años-50años, 50años-*]
+    max_searches_per_run: 400
   zonaprop:
     enabled: true
     property_slug: departamentos

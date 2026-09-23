@@ -108,9 +108,28 @@ sources:
     # los ordena arriba). Dejalo vacío ("") para no filtrar.
     listing_slug: propiedades-individuales
     region_slug: capital-federal
-    # El robots.txt prohíbe paginar (_Desde_): una página (~48 avisos) por
-    # zona. Una sola request por zona, espaciadas.
-    rate_limit_seconds: 8.0
+    # El robots.txt prohíbe paginar (_Desde_): una página (48 avisos) por
+    # búsqueda. El robots.txt pide Crawl-delay: 5 a Bingbot y nada al resto;
+    # usamos lo mismo que a Bing. En todo el log no hubo nunca un 403 ni un
+    # 429 de ML, y si aparece uno se corta la fuente.
+    rate_limit_seconds: 5.0
+    # Una búsqueda de más de 48 avisos no entra en su única página: se parte
+    # en más chicas hasta que entren. Primero sub-barrios (search.subzones),
+    # después ambientes, después antigüedad. Son segmentos del path que el
+    # robots.txt no prohíbe, a diferencia del precio (_PriceRange_,
+    # _PriceMin_, _PriceMax_) y la superficie (_TOTAL*AREA_, _COVERED*AREA_).
+    # Palermo tiene 5.810 avisos: hacen falta más de 120 búsquedas para
+    # verlo entero. Vacías, no se parte.
+    split_rooms: ["1-ambiente", "2-ambientes", "3-ambientes", "4-ambientes", "mas-de-5-ambientes"]
+    # "A estrenar" (0 años) es el tramo más grande: 2.708 de los 5.810 de
+    # Palermo. Probablemente ML mete ahí a los avisos que no declaran
+    # antigüedad (no está verificado). Es el que menos se deja partir.
+    split_age: ["0años-0años", "1años-15años", "15años-40años", "40años-50años", "50años-*"]
+    # Tope de búsquedas por corrida, entre todas las zonas (0 = sin tope). Se
+    # reparte en proporción al tamaño de cada zona, y lo que no entra en una
+    # corrida rota al día siguiente. 400 a 5 s son ~33 min, en paralelo con
+    # Zonaprop (~80): no alarga la corrida.
+    max_searches_per_run: 400
     # Cómo llama ML a una zona, cuando no es como en search.zones. ML no da
     # error ante un barrio que no conoce: con "canitas" hacía una búsqueda
     # por texto (1.115 avisos, algunos de Palermo o Belgrano) en vez del

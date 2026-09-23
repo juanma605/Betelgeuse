@@ -579,3 +579,86 @@ def test_mercadolibre_usa_el_nombre_del_barrio_en_ml_y_valida_la_zona(monkeypatc
     assert list(sin_alias.fetch("Cañitas", {"zones": ["Cañitas"]})) == []
     assert sin_alias.incomplete_zones == {"Cañitas"}
     assert sin_alias.totals == {}
+
+
+def _ml_falso(monkeypatch, fuente, paginas):
+    """Un ML de mentira: `paginas` va de la ruta de búsqueda a (título, total)
+    o a un código de error. Cada búsqueda devuelve dos avisos propios."""
+    import httpx
+
+    tarjetas = (FIXTURES / "mercadolibre_page.html").read_text(encoding="utf-8")
+    pedidas = []
+
+    def get(url):
+        ruta = url.split("propiedades-individuales/", 1)[1].replace("capital-federal/", "")
+        pedidas.append(ruta)
+        pedido = httpx.Request("GET", url)
+        valor = paginas[ruta]
+        if isinstance(valor, int):
+            return httpx.Response(valor, request=pedido)
+        titulo, total = valor
+        n = len(pedidas)
+        html = (
+            f"<h1>{titulo}</h1>"
+            f'<span class="ui-search-search-result__quantity-results">{total} resultados</span>'
+            + tarjetas.replace("2000000002", f"2{n:09d}").replace("3000000003", f"3{n:09d}")
+        )
+        return httpx.Response(200, text=html, request=pedido)
+
+    monkeypatch.setattr(fuente.client, "get", get)
+    return pedidas
+
+
+_PALERMO = "Departamentos en Venta Propiedades individuales en Palermo, Capital Federal"
+
+
+def test_mercadolibre_parte_solo_lo_que_no_entra_en_una_pagina(monkeypatch):
+    fuente = mercadolibre.build({
+        "rate_limit_seconds": 0,
+        "split_rooms": ["1-ambiente", "2-ambientes"],
+        "split_age": ["0años-0años", "1años-15años"],
+    })
+    pedidas = _ml_falso(monkeypatch, fuente, {
+        "palermo/": (_PALERMO, "500"),
+        "1-ambiente/palermo/": (_PALERMO + ", 1 ambiente", "30"),      # entra: no se parte
+        "2-ambientes/palermo/": (_PALERMO + ", 2 ambientes", "200"),   # no entra: por antigüedad
+        "2-ambientes/palermo/_PROPERTY*AGE_0años-0años": (_PALERMO + ", 2 ambientes", "150"),
+        # Más que su búsqueda madre: ML no aplicó el filtro, se descarta.
+        "2-ambientes/palermo/_PROPERTY*AGE_1años-15años": (_PALERMO + ", 2 ambientes", "900"),
+    })
+    items = list(fuente.fetch("Palermo", {"zones": ["Palermo"]}))
+
+    assert pedidas == [
+        "palermo/", "1-ambiente/palermo/", "2-ambientes/palermo/",
+        "2-ambientes/palermo/_PROPERTY*AGE_0años-0años",
+        "2-ambientes/palermo/_PROPERTY*AGE_1años-15años",
+    ]
+    # Dos avisos por búsqueda válida (4 de 5), todos distintos, en Palermo.
+    assert len(items) == len({i["id"] for i in items}) == 8
+    assert fuente.totals == {"Palermo": 500}
+
+
+def test_mercadolibre_reparte_el_tope_por_tamano_y_frena_ante_un_429(monkeypatch):
+    # Tope 6: se van 2 en las búsquedas de las zonas y quedan 4, que se
+    # reparten en proporción. Palermo (500 de 520) se lleva 3; Colegiales
+    # (20) entra entera en una página y no necesita ninguna.
+    fuente = mercadolibre.build({
+        "rate_limit_seconds": 0, "max_searches_per_run": 6,
+        "split_rooms": ["1-ambiente", "2-ambientes", "3-ambientes"],
+    })
+    colegiales = "Departamentos en Venta Propiedades individuales en Colegiales, Capital Federal"
+    pedidas = _ml_falso(monkeypatch, fuente, {
+        "palermo/": (_PALERMO, "500"),
+        "colegiales/": (colegiales, "20"),
+        "1-ambiente/palermo/": (_PALERMO + ", 1 ambiente", "100"),
+        "2-ambientes/palermo/": 429,
+    })
+    buscar = {"zones": ["Palermo", "Colegiales"]}
+    list(fuente.fetch("Palermo", buscar))
+    list(fuente.fetch("Colegiales", buscar))
+
+    # Después del 429 no se pide nada más: 3 ambientes queda sin pedir.
+    assert pedidas == ["palermo/", "colegiales/", "1-ambiente/palermo/", "2-ambientes/palermo/"]
+    # El 429 corta la fuente: Palermo no cuenta ausencias esta corrida.
+    assert "Palermo" in fuente.incomplete_zones
+    assert "Colegiales" not in fuente.incomplete_zones
