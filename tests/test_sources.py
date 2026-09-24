@@ -662,3 +662,62 @@ def test_mercadolibre_reparte_el_tope_por_tamano_y_frena_ante_un_429(monkeypatch
     # El 429 corta la fuente: Palermo no cuenta ausencias esta corrida.
     assert "Palermo" in fuente.incomplete_zones
     assert "Colegiales" not in fuente.incomplete_zones
+
+
+def _argenprop_con_paginas(monkeypatch, secuencia):
+    """Argenprop contra páginas de mentira: cada navegación consume el
+    siguiente valor de `secuencia` ("reto" = verificación de Cloudflare,
+    "ok" = una página que carga). Devuelve la fuente y las URLs pedidas."""
+    from contextlib import contextmanager
+
+    pedidas = []
+    restantes = list(secuencia)
+
+    class Pagina:
+        def goto(self, url, **k):
+            pedidas.append(url)
+            self._estado = restantes.pop(0) if restantes else "ok"
+
+        def wait_for_selector(self, *a, **k):
+            if self._estado == "reto":
+                raise TimeoutError("sin tarjetas")
+
+        def title(self):
+            return "Just a moment..." if self._estado == "reto" else "Departamentos en venta"
+
+        def inner_text(self, _sel):
+            return "Let's confirm you are human" if self._estado == "reto" else "20 resultados"
+
+        def query_selector_all(self, _sel):
+            return []
+
+    @contextmanager
+    def pagina():
+        yield Pagina()
+
+    monkeypatch.setattr(argenprop, "browser_page", pagina)
+    monkeypatch.setattr(argenprop.time, "sleep", lambda s: None)
+    fuente = argenprop.build({"sitemap": None, "max_challenges_in_a_row": 3})
+    monkeypatch.setattr(fuente, "_rutas_de", lambda zone, ps, zonas: [f"/{zone}/a", f"/{zone}/b", f"/{zone}/c"])
+    return fuente, pedidas
+
+
+def test_argenprop_deja_de_insistir_despues_de_tres_verificaciones_seguidas(monkeypatch):
+    """El 24/09 fueron 50+ verificaciones en 20 minutos: cortaba cada
+    búsqueda y pasaba a la siguiente. Tres seguidas ya dicen que no."""
+    fuente, pedidas = _argenprop_con_paginas(monkeypatch, ["reto"] * 10)
+    zonas = {"zones": ["palermo", "belgrano"]}
+    for zona in zonas["zones"]:
+        assert list(fuente.fetch(zona, zonas)) == []
+
+    assert len(pedidas) == 3
+    # Ninguna de las dos zonas se leyó: ninguna puede dar de baja avisos.
+    assert fuente.incomplete_zones == {"palermo", "belgrano"}
+
+
+def test_argenprop_una_pagina_que_carga_reinicia_la_cuenta(monkeypatch):
+    fuente, pedidas = _argenprop_con_paginas(monkeypatch, ["reto", "reto", "ok", "reto", "reto", "ok"])
+    monkeypatch.setattr(fuente, "_rutas_de", lambda zone, ps, zonas: [f"/{zone}/{n}" for n in range(6)])
+    list(fuente.fetch("palermo", {"zones": ["palermo"]}))
+    assert not fuente._frenado
+    assert len(pedidas) == 6

@@ -60,6 +60,14 @@ class ArgenpropSource:
         # las cinco entran. No se resuelve ni se falsifica nada — se
         # evita que el challenge se dispare. Ver README.
         self.new_session_per_page = bool(conf.get("new_session_per_page", True))
+        # Verificaciones de Cloudflare seguidas antes de dejar de pedir por
+        # esta corrida. Cortar una búsqueda y pasar a la siguiente no alcanza:
+        # el 24/09 fueron 50+ verificaciones en 20 minutos, insistiéndole a un
+        # sitio que venía diciendo que no. Una página que carga bien pone el
+        # contador en cero. 0 = no frenar nunca.
+        self.max_cortes_seguidos = int(conf.get("max_challenges_in_a_row", 3))
+        self._cortes_seguidos = 0
+        self._frenado = False
         self.incomplete_zones: set[str] = set()
         # Ver el comentario en zonaprop.py: leída hasta el tope del
         # robots.txt, con inventario por delante.
@@ -140,11 +148,19 @@ class ArgenpropSource:
 
     def fetch(self, zone: str, search_cfg: dict) -> Iterator[dict]:
         zonas = list(search_cfg.get("zones") or [zone])
+        if self._frenado:
+            # Frenado en una zona anterior: esta no se lee, y por eso no
+            # puede dar de baja nada.
+            self.incomplete_zones.add(zone)
+            return
         with self._sesion() as compartida:
             for i, property_slug in enumerate(self.property_slugs):
                 if i > 0:
                     time.sleep(self.delay)
                 for j, ruta in enumerate(self._rutas_de(zone, property_slug, zonas)):
+                    if self._frenado:
+                        self.incomplete_zones.add(zone)
+                        return
                     if i or j:
                         time.sleep(self.delay)
                     yield from self._fetch_property_type(compartida, ruta, zone)
@@ -163,6 +179,8 @@ class ArgenpropSource:
         # Los más baratos primero: otra lista, no las mismas tarjetas dadas
         # vuelta, y es donde miramos cuando buscamos subvaluados.
         for order in self.extra_orders:
+            if self._frenado:
+                return
             time.sleep(self.delay)
             yield from self._fetch_pages(page_obj, ruta, zone, order, 1)
 
@@ -196,20 +214,34 @@ class ArgenpropSource:
         self, page_obj, url: str, ruta: str, zone: str, page_num: int
     ) -> tuple[list[dict], bool]:
         """Los avisos de una página, y si tiene sentido pedir la siguiente."""
+        if self._frenado:
+            self.incomplete_zones.add(zone)
+            return [], False
         try:
             page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
             page_obj.wait_for_selector(CARD_SELECTOR, timeout=10000)
         except Exception as exc:
             self.incomplete_zones.add(zone)
             if is_bot_challenge(page_obj):
+                self._cortes_seguidos += 1
                 log.warning(
                     "[argenprop] Cloudflare pidió verificación en %s (pág %d) — "
                     "corto acá, no la esquivamos. Quedaron %d página(s).",
                     ruta, page_num, page_num - 1,
                 )
+                if self.max_cortes_seguidos and self._cortes_seguidos >= self.max_cortes_seguidos:
+                    self._frenado = True
+                    log.warning(
+                        "[argenprop] %d verificaciones seguidas: dejo de pedirle a "
+                        "Argenprop por esta corrida. Las zonas que faltan quedan "
+                        "incompletas y no dan de baja nada.",
+                        self._cortes_seguidos,
+                    )
             else:
                 log.info("[argenprop] corto en %s (pág %d): %s", ruta, page_num, exc)
             return [], False
+
+        self._cortes_seguidos = 0
 
         cards = page_obj.query_selector_all(CARD_SELECTOR)
         if not cards:
