@@ -69,7 +69,9 @@ sources:
     max_searches_per_zone: 6
     new_session_per_page: true
   argenprop:
-    enabled: true
+    # En pausa desde el 24/09, ver config.yaml.
+    enabled: false
+    max_challenges_in_a_row: 3
     property_slug: departamentos
     operation_slug: alquiler
     rate_limit_seconds: 8.0

@@ -115,6 +115,30 @@ Antes de implementar: revisar el `robots.txt` de las fichas y medir cuántas se
 pueden pedir sin disparar la verificación. Otra opción es buscar la dirección
 en el texto de la descripción, que a veces la menciona, pero eso es adivinar.
 
+### Argenprop está en pausa (desde el 24/09)
+
+Cloudflare venía cortando casi todos sus listados (325 verificaciones el
+22/09, 82 el 23, 50+ el 24 en 20 minutos), así que está en
+`enabled: false` para que la IP se enfríe. Además, desde ahora deja de
+pedir después de 3 verificaciones seguidas (`max_challenges_in_a_row`).
+
+El camino a cubrirlo de verdad es su sitemap de fichas
+(`sitemap-ficha-venta-caba`, 3 partes .xml.gz): lista ~36.500 deptos en
+venta en nuestras zonas (teníamos 696), con barrio y ambientes en la URL y
+`lastmod` real, y cubre el 99% de lo que teníamos activo. El sitemap se
+baja por HTTP sin cortes; las fichas no: a 8 s cortó a la séptima con un
+202 vacío (desafío, no página). Para retomar:
+
+1. Con la IP fría, pedir unas pocas páginas a mano para ver si sigue
+   marcada.
+2. Medir fichas más lento (20-30 s) y lejos del horario del cron, contando
+   el 202 vacío como desafío.
+3. Recién con ese dato, diseñar la carga inicial (son muchas fichas) y el
+   refresco por `lastmod`.
+
+Aunque las fichas no anden, el sitemap solo ya sirve: si un aviso no está,
+se dio de baja (bajas exactas, como Remax) y da el denominador por zona.
+
 ### Agregar una zona no es solo sumarla a la lista
 
 Cada portal nombra los barrios distinto y ninguno devuelve 404 cuando no
