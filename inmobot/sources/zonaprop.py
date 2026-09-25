@@ -26,6 +26,10 @@ from ._text import parse_number, parse_price, parse_total
 log = logging.getLogger(__name__)
 
 BASE = "https://www.zonaprop.com.ar"
+
+# Avisos por página de búsqueda (medido el 25/09). Con el tope de 5 páginas
+# del robots.txt, una búsqueda de hasta 150 avisos se lee entera.
+_POR_PAGINA = 30
 MAX_PAGES = 5
 
 CARD_SELECTOR = "[data-posting-type]"
@@ -92,6 +96,9 @@ class ZonapropSource:
         self._padres: set[str] = set()
         # Las zonas del config, para archivar cada aviso en la de su barrio.
         self._zonas: list[str] = []
+        # Sufijo de la búsqueda de publicados en el último día, que se pide
+        # por zona justo después de la base. Vacío, no se pide.
+        self.new_listings_suffix = conf.get("new_listings_suffix") or ""
         # Cuántos avisos dice tener el portal en cada zona (ver
         # db.search_totals). Solo de la búsqueda base de la zona.
         self.totals: dict[str, int] = {}
@@ -191,15 +198,27 @@ class ZonapropSource:
                 # (`-con-balcon`, `-2-habitaciones`), que sí.
                 rutas = self._rutas_de(zone, property_slug, zonas)
                 de_sub = {self._ruta_de_subzona(property_slug, sub, zone): sub for sub in subzonas}
-                rutas = rutas[:1] + list(de_sub) + [r for r in rutas[1:] if r not in de_sub]
+                # Los publicados en el último día, sobre la búsqueda base (que
+                # ya tiene el nombre que usa Zonaprop: belgrano-r-belgrano).
+                # Van segundos: si Cloudflare corta más tarde, lo nuevo del
+                # día ya está leído.
+                nuevos = (
+                    [rutas[0].removesuffix(".html") + self.new_listings_suffix + ".html"]
+                    if self.new_listings_suffix and rutas else []
+                )
+                especiales = set(de_sub) | set(nuevos)
+                rutas = rutas[:1] + nuevos + list(de_sub) + [
+                    r for r in rutas[1:] if r not in especiales
+                ]
                 for j, ruta in enumerate(rutas):
                     if i or j:
                         time.sleep(self.delay)
                     yield from self._fetch_pages(
                         compartida, ruta, zone, self._paginas_de(ruta),
-                        es_propia=j == 0 or ruta in de_sub,
+                        es_propia=j == 0 or ruta in especiales,
                         es_base=j == 0,
                         esperado=de_sub.get(ruta),
+                        debe_decir=self.new_listings_suffix if ruta in nuevos else None,
                     )
 
     def _ruta_de_subzona(self, property_slug: str, sub: str, zone: str) -> str:
@@ -229,6 +248,7 @@ class ZonapropSource:
     def _fetch_pages(
         self, page_obj, ruta: str, zone: str, max_pages: int, es_propia: bool = True,
         es_base: bool | None = None, esperado: str | None = None,
+        debe_decir: str | None = None,
     ) -> Iterator[dict]:
         """Las páginas de una búsqueda.
 
@@ -236,6 +256,9 @@ class ZonapropSource:
         `esperado`: el sub-barrio que tiene que decir el título, seguido de
         la zona. Zonaprop no da 404 ante un slug que no reconoce, devuelve
         otra búsqueda: si el título no los nombra, se descarta entera.
+        `debe_decir`: un filtro que el título tiene que nombrar, junto con
+        la zona ("118 Departamentos publicado hace menos de 1 dia en venta
+        en Palermo, CABA"). Si no lo nombra, el filtro no se aplicó.
         """
         es_base = es_propia if es_base is None else es_base
         for page_num in range(1, max_pages + 1):
@@ -258,6 +281,23 @@ class ZonapropSource:
                     esperado, self._ultimo_titulo,
                 )
                 return
+            if debe_decir and page_num == 1:
+                titulo = slug(self._ultimo_titulo)
+                if slug(debe_decir) not in titulo or slug(zone) not in titulo:
+                    log.info(
+                        "[zonaprop] %s no aplicó el filtro (el título dice %r), la salteo.",
+                        ruta, self._ultimo_titulo,
+                    )
+                    return
+                entran = max_pages * _POR_PAGINA
+                if self._ultimo_total is not None and self._ultimo_total > entran:
+                    log.warning(
+                        "[zonaprop] %s: %d publicados en el último día, entran %d. "
+                        "Se ven los primeros.", zone, self._ultimo_total, entran,
+                    )
+                else:
+                    log.info("[zonaprop] %s: %s publicados en el último día.",
+                             zone, self._ultimo_total)
             if es_base and page_num == 1 and self._ultimo_total is not None:
                 # Con varios tipos de propiedad, cada uno tiene su búsqueda
                 # base y la zona tiene la suma.

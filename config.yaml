@@ -157,6 +157,11 @@ sources:
     # (Allow puntual para pagina-2..5.html, Disallow general de ahí en más).
     # Es un tope duro: aunque pongas más, el código lo recorta a 5.
     max_pages: 5
+    # Búsqueda de los publicados en el último día, por zona, justo después
+    # de la base. En Palermo son ~118 (4 páginas de 30): entran enteros, así
+    # que ningún aviso nuevo se escapa aunque la zona tenga 12.000. Se valida
+    # por el título. Vacío, no se pide.
+    new_listings_suffix: "-publicado-hace-menos-de-1-dia"
     # Pasada extra sobre la misma búsqueda, reordenada. De todos los órdenes
     # que ofrece el sitio, el robots.txt habilita uno solo
     # (`Allow: *-orden-precio-ascendente.html`, `Disallow: *-orden-*`) y es

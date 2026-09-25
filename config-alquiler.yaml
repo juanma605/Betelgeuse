@@ -63,6 +63,7 @@ sources:
     operation_slug: alquiler
     rate_limit_seconds: 5.0
     max_pages: 5
+    new_listings_suffix: -publicado-hace-menos-de-1-dia
     extra_orders:
     - -orden-precio-ascendente
     sitemap: sitemaps_https.xml

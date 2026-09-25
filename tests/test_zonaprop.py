@@ -156,3 +156,55 @@ def test_el_sub_barrio_usa_el_nombre_del_sitemap_si_lo_tiene():
     assert src._ruta_de_subzona("departamentos", "Palermo Soho", "Palermo") == (
         "/departamentos-venta-palermo-soho.html"
     )
+
+
+def _con_titulos(monkeypatch, titulos, conf):
+    monkeypatch.setattr(zonaprop.time, "sleep", lambda s: None)
+    src = zonaprop.ZonapropSource(dict({"sitemap": None, "max_pages": 2}, **conf))
+    pedidas = []
+
+    def traer(page_obj, url, ruta, zone, n):
+        pedidas.append((ruta, n))
+        src._ultimo_titulo = titulos[ruta]
+        src._ultimo_total = zonaprop.parse_total(titulos[ruta])
+        return [{"id": f"{ruta}{n}", "neighborhood": "Palermo", "city": "Palermo"}], True
+
+    monkeypatch.setattr(src, "_traer_pagina", traer)
+    monkeypatch.setattr(src, "_rutas_de", lambda zone, ps, zonas: ["/departamentos-venta-palermo.html"])
+    return src, pedidas
+
+
+def test_los_publicados_del_dia_van_despues_de_la_base(monkeypatch):
+    """Publicados hace menos de 1 día en Palermo son ~118: entran en 4
+    páginas de 30. Pedidos cada día, ningún aviso nuevo se escapa."""
+    base = "/departamentos-venta-palermo.html"
+    nuevos = "/departamentos-venta-palermo-publicado-hace-menos-de-1-dia.html"
+    src, pedidas = _con_titulos(monkeypatch, {
+        base: "11.971 Departamentos en venta en Palermo, CABA",
+        nuevos: "118 Departamentos publicado hace menos de 1 dia en venta en Palermo, CABA",
+    }, {"new_listings_suffix": "-publicado-hace-menos-de-1-dia"})
+    avisos = list(src.fetch("Palermo", {"zones": ["Palermo"]}))
+
+    assert pedidas == [(base, 1), (base, 2), (nuevos, 1), (nuevos, 2)]
+    assert len(avisos) == 4
+    # El total de la zona sigue siendo el de la búsqueda base.
+    assert src.totals == {"Palermo": 11971}
+
+
+def test_si_el_titulo_no_nombra_el_filtro_los_nuevos_se_descartan(monkeypatch):
+    base = "/departamentos-venta-palermo.html"
+    nuevos = "/departamentos-venta-palermo-publicado-hace-menos-de-1-dia.html"
+    src, pedidas = _con_titulos(monkeypatch, {
+        base: "11.971 Departamentos en venta en Palermo, CABA",
+        # Zonaprop ignoró el sufijo y devolvió Palermo entero.
+        nuevos: "11.971 Departamentos en venta en Palermo, CABA",
+    }, {"new_listings_suffix": "-publicado-hace-menos-de-1-dia"})
+    avisos = list(src.fetch("Palermo", {"zones": ["Palermo"]}))
+
+    assert pedidas[-1] == (nuevos, 1)          # se ve el título y no se pagina
+    assert not any("publicado" in a["id"] for a in avisos)
+
+    # Sin sufijo configurado, no se pide.
+    src, pedidas = _con_titulos(monkeypatch, {base: "11.971 Departamentos en venta en Palermo, CABA"}, {})
+    list(src.fetch("Palermo", {"zones": ["Palermo"]}))
+    assert {r for r, _ in pedidas} == {base}
