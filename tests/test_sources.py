@@ -729,3 +729,34 @@ def test_argenprop_una_pagina_que_carga_reinicia_la_cuenta(monkeypatch):
     list(fuente.fetch("palermo", {"zones": ["palermo"]}))
     assert not fuente._frenado
     assert len(pedidas) == 6
+
+
+def test_mercadolibre_cuenta_lo_que_quedo_sin_ver(monkeypatch, caplog):
+    """El resumen de cada zona dice cuánto quedó afuera y por qué: por el
+    tope (se arregla subiéndolo) o porque ya no se puede partir más (hace
+    falta otro corte)."""
+    import logging
+
+    fuente = mercadolibre.build({
+        "rate_limit_seconds": 0, "max_searches_per_run": 4,
+        "split_rooms": ["1-ambiente", "2-ambientes"],
+        "split_age": ["0años-0años", "1años-15años"],
+    })
+    _ml_falso(monkeypatch, fuente, {
+        "palermo/": (_PALERMO, "500"),
+        "1-ambiente/palermo/": (_PALERMO + ", 1 ambiente", "100"),
+        "2-ambientes/palermo/": (_PALERMO + ", 2 ambientes", "200"),
+        "1-ambiente/palermo/_PROPERTY*AGE_0años-0años": (_PALERMO + ", 1 ambiente", "80"),
+    })
+    # Tope 4: 1 para la zona y 3 para el resto. Las 2 de ambientes entran;
+    # de las 4 de antigüedad entra 1 (la que toque por rotación) y 3 quedan
+    # sin pedir.
+    monkeypatch.setattr(mercadolibre, "date", type("D", (), {
+        "today": staticmethod(lambda: __import__("datetime").date(2026, 1, 4))
+    }))
+    with caplog.at_level(logging.INFO, logger="inmobot.sources.mercadolibre"):
+        list(fuente.fetch("Palermo", {"zones": ["Palermo"]}))
+    resumen = [r.getMessage() for r in caplog.records if "búsquedas (" in r.getMessage()][0]
+    assert "Sin pedir por el tope: 3." in resumen
+    # La de 80 avisos ya no se parte: se ven 48 y 32 quedan afuera.
+    assert "no entran en una página: 1 (32 avisos que no se ven)" in resumen

@@ -127,9 +127,11 @@ sources:
     split_age: ["0años-0años", "1años-15años", "15años-40años", "40años-50años", "50años-*"]
     # Tope de búsquedas por corrida, entre todas las zonas (0 = sin tope). Se
     # reparte en proporción al tamaño de cada zona, y lo que no entra en una
-    # corrida rota al día siguiente. 400 a 5 s son ~33 min, en paralelo con
-    # Zonaprop (~80): no alarga la corrida.
-    max_searches_per_run: 400
+    # corrida rota al día siguiente. Subido de 400 a 650 el 25/09: con 400,
+    # ML terminaba en ~37 min y Zonaprop en 60-80, así que 650 (~55 min)
+    # sigue sin alargar la corrida. El log de cada zona dice cuántas quedaron
+    # sin pedir por el tope.
+    max_searches_per_run: 650
     # Cómo llama ML a una zona, cuando no es como en search.zones. ML no da
     # error ante un barrio que no conoce: con "canitas" hacía una búsqueda
     # por texto (1.115 avisos, algunos de Palermo o Belgrano) en vez del

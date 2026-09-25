@@ -256,12 +256,21 @@ class MercadoLibreSource:
                     items.append(item)
             return total
 
+        # Lo que el tope dejó sin pedir, y lo que ya no se puede partir más y
+        # tiene más de una página: las dos cosas que dicen si conviene subir
+        # el tope o sumar otro corte (ver el log).
+        sin_pedir = 0
+        no_entran: list[int] = []
+
         def tramo(nodos: list) -> list:
             """Los nodos que entran en lo que queda del tope, rotando por día."""
+            nonlocal sin_pedir
             if presupuesto is None or len(nodos) <= presupuesto:
                 return nodos
             if presupuesto <= 0:
+                sin_pedir += len(nodos)
                 return []
+            sin_pedir += len(nodos) - presupuesto
             arranque = (date.today().timetuple().tm_yday * presupuesto) % len(nodos)
             return [nodos[(arranque + i) % len(nodos)] for i in range(presupuesto)]
 
@@ -284,12 +293,19 @@ class MercadoLibreSource:
         if self.split_age:
             hijos = [(b, a, e, t) for b, a, t in partibles for e in self.split_age]
             for b, a, e, padre in tramo(hijos):
-                pedir("antigüedad", b, a, e, padre=padre)
+                total = pedir("antigüedad", b, a, e, padre=padre)
+                if total and total > POR_PAGINA:
+                    no_entran.append(total)
+        else:
+            no_entran = [t for _, _, t in partibles]
 
         log.info(
-            "[mercadolibre] %s: %d búsquedas (1 de la zona%s), %d avisos.",
+            "[mercadolibre] %s: %d búsquedas (1 de la zona%s), %d avisos. "
+            "Sin pedir por el tope: %d. Ya no se parten y no entran en una "
+            "página: %d (%d avisos que no se ven).",
             zone, 1 + sum(cuenta.values()),
             "".join(f", {n} por {k}" for k, n in cuenta.items() if n), len(items),
+            sin_pedir, len(no_entran), sum(t - POR_PAGINA for t in no_entran),
         )
         return items
 
