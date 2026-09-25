@@ -115,12 +115,14 @@ Antes de implementar: revisar el `robots.txt` de las fichas y medir cuántas se
 pueden pedir sin disparar la verificación. Otra opción es buscar la dirección
 en el texto de la descripción, que a veces la menciona, pero eso es adivinar.
 
-### Argenprop está en pausa (desde el 24/09)
+### Argenprop y Cloudflare
 
 Cloudflare venía cortando casi todos sus listados (325 verificaciones el
-22/09, 82 el 23, 50+ el 24 en 20 minutos), así que está en
-`enabled: false` para que la IP se enfríe. Además, desde ahora deja de
-pedir después de 3 verificaciones seguidas (`max_challenges_in_a_row`).
+22/09, 82 el 23, 50+ el 24 en 20 minutos). Estuvo en pausa el 24 y el
+25/09 para que la IP se enfríe y se reactivó para la corrida del 26. Deja
+de pedir después de 3 verificaciones seguidas (`max_challenges_in_a_row`),
+así que si sigue marcada el costo es de 3 páginas por corrida. Mirar el
+log del 26: si frena enseguida, la IP sigue marcada.
 
 El camino a cubrirlo de verdad es su sitemap de fichas
 (`sitemap-ficha-venta-caba`, 3 partes .xml.gz): lista ~36.500 deptos en

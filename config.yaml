@@ -189,12 +189,11 @@ sources:
     new_session_per_page: true
 
   argenprop:
-    # En pausa desde el 24/09 para que la IP se enfríe: Cloudflare venía
-    # cortando casi todo (325 verificaciones el 22/09, 82 el 23, 50+ el 24
-    # en 20 minutos) y seguir pidiendo solo empeora la reputación. Antes de
-    # volver a prenderlo, medir con la IP fría: primero unas pocas páginas
-    # a mano, después el sitemap de fichas (ver CLAUDE.md).
-    enabled: false
+    # Estuvo en pausa el 24 y el 25/09 para que la IP se enfriara:
+    # Cloudflare venía cortando casi todo (325 verificaciones el 22/09, 82
+    # el 23, 50+ el 24). Si sigue marcada, max_challenges_in_a_row (abajo)
+    # la frena a la tercera verificación seguida. Ver CLAUDE.md.
+    enabled: true
     # Arman la URL como /<property_slug>/<operation_slug>/<zona>
     property_slug: departamentos   # departamentos | casas | ph (o una lista)
     operation_slug: venta          # venta | alquiler
