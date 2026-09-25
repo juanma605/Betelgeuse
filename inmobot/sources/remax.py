@@ -35,6 +35,10 @@ STATE_SELECTOR = "#ng-state"
 
 PAGINAS_POR_AVISO = 10
 
+# Proporción de avisos de una página que tienen que nombrar al barrio pedido
+# para que la búsqueda cuente como de ese barrio (ver busqueda_degradada).
+_MINIMO_DEL_BARRIO = 0.5
+
 # Angular deja los resultados de la búsqueda serializados en este <script>
 # (transfer state) para no volver a pedirlos en el cliente. Ahí viene la
 # ubicación de cada aviso, que la tarjeta no muestra.
@@ -286,14 +290,18 @@ def busqueda_degradada(labels: list[str], zone: str) -> bool:
     notarlo: los avisos son válidos, tienen precio, m² y fotos — están en
     otra ciudad.
 
-    Alcanza con que el barrio pedido aparezca en alguno de los geoLabel,
-    porque Remax mete vecinos en los resultados; lo que delata a una
-    búsqueda degradada es que no aparezca en ninguno.
+    La página es del barrio si al menos la mitad de sus avisos lo nombran.
+    Antes alcanzaba con uno, y el 25/09 la búsqueda de Villa Urquiza vino
+    con el país entero (72.482 avisos): en la primera página había uno de
+    Villa Urquiza, pasó, y entraron 119 avisos de Flores, Balvanera o Lanús
+    archivados como Villa Urquiza. En las búsquedas buenas, entre el 98 y
+    el 100% de los avisos nombran el barrio; en una nacional, ~1%.
     """
     if not labels:
         return False  # sin dato no acusamos: puede ser un cambio del state
     pedido = slug(zone)
-    return not any(pedido in slug(label) for label in labels)
+    del_barrio = sum(1 for label in labels if pedido in slug(label))
+    return del_barrio < _MINIMO_DEL_BARRIO * len(labels)
 
 
 def _respuesta_de_busqueda(state_json: str | None) -> dict:

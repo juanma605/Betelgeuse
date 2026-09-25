@@ -336,8 +336,16 @@ def test_remax_se_da_cuenta_cuando_le_devuelven_otra_busqueda():
     assert not remax.busqueda_degradada(palermo, "Palermo")
     del_pais = ["Beccar, San Isidro", "Belén de Escobar, Escobar", "Belgrano, Capital Federal"]
     assert remax.busqueda_degradada(del_pais, "Belgrano R")
-    # Esos mismos resultados son legítimos si lo que pedimos era Belgrano.
-    assert not remax.busqueda_degradada(del_pais, "Belgrano")
+    # Tampoco son de Belgrano: uno de tres no alcanza. Con "alguno lo
+    # nombra" pasaba, y así entró el país entero como Villa Urquiza el 25/09.
+    assert remax.busqueda_degradada(del_pais, "Belgrano")
+    nacional = ["Villa Urquiza, Capital Federal"] + ["Flores, Capital Federal"] * 30 + [
+        "Lanús Oeste, Lanús", "Moreno, Moreno", "La Plata, La Plata",
+    ] * 20
+    assert remax.busqueda_degradada(nacional, "Villa Urquiza")
+    # Los vecinos que Remax mete en una búsqueda buena no la tumban.
+    con_vecinos = ["Palermo, Capital Federal"] * 9 + ["Colegiales, Capital Federal"]
+    assert not remax.busqueda_degradada(con_vecinos, "Palermo")
     # Sin etiquetas no se acusa: si Remax cambia el formato del state, el
     # scraper sigue trayendo avisos en vez de cortar todas las zonas.
     assert not remax.busqueda_degradada([], "Palermo")
